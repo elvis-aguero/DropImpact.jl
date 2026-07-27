@@ -215,7 +215,7 @@ Existence of at least one root of \eqref{eq:theta-c-crossing} on $(0,\pi)$, for 
 \subsubsection{What is not enforced}
 Equation~\eqref{eq:galerkin}, together with \eqref{eq:theta-c-crossing}'s determination of $\theta_c$, does not by itself guarantee two properties that a physically admissible contact solution must have; each must be checked against the computed $\hat c_n(\tau)$ once solved, exactly as \cite{AlventosaEtAl2023} check loss of contact from the sign of $f(\tau)$. Positivity of the pressure throughout the pressed region,
 \begin{equation}
-    p(x,\tau) = \sum_{n=0}^N\hat c_n(\tau)(x-x_c(\tau))^n \ge 0\text{,}\qquad x\in[x_c(\tau),1]\text{,}
+    p(x,\tau) = \sum_{n=0}^N\hat c_n(\tau)\,\tilde P_n\big(\psi(x,\tau)\big) \ge 0\text{,}\qquad x\in[x_c(\tau),1]\text{,}
     \label{eq:check-positivity}
 \end{equation}
 is not implied. Non-intersection of the two surfaces beyond the selected crossing,
@@ -237,7 +237,7 @@ Every other quantity used in \eqref{eq:galerkin} and \eqref{eq:theta-c-crossing}
 
 Define the residual $R:\mathbb R^{N+2}\to\mathbb R^{N+2}$,
 \begin{equation}
-    R_n(X) := \int_{x_c}^1\Big[\eta\big(r(\theta,\tau^{k+1};X),\tau^{k+1}\big)-z_{cm}(X)+z_d(\theta,\tau^{k+1};X)\Big](x-x_c)^n\,dx\text{,}\quad n=0,\dots,N\text{,}
+    R_n(X) := \int_{x_c}^1\Big[\eta\big(r(\theta,\tau^{k+1};X),\tau^{k+1}\big)-z_{cm}(X)+z_d(\theta,\tau^{k+1};X)\Big]\,\tilde P_n\big(\psi(x,\tau^{k+1})\big)\,dx\text{,}\quad n=0,\dots,N\text{,}
     \label{eq:newton-residual-galerkin}
 \end{equation}
 \begin{equation}
@@ -277,7 +277,7 @@ The complete system solved at every time level $\tau^{k+1}$ is collected below: 
 
 \emph{Pressure and contact angle, the primary unknowns of the contact problem, $\hat c_0^{k+1},\dots,\hat c_N^{k+1}$ and $\theta_c^{k+1}$ --- $\theta_c^{k+1}$ is a component of $X$, not computed from the rest of it (\S\ref{subsubsec:contact-angle}):}
 \begin{equation}
-    p(x,\tau^{k+1})=\sum_{n=0}^N\hat c_n^{k+1}(x-x_c^{k+1})^n\ (x\ge x_c^{k+1})\text{,}\qquad p\equiv0\ (x<x_c^{k+1})\text{,}\qquad x_c^{k+1}=\cos\theta_c^{k+1}\text{.}
+    p(x,\tau^{k+1})=\sum_{n=0}^N\hat c_n^{k+1}\,\tilde P_n\big(\psi(x,\tau^{k+1})\big)\ (x\ge x_c^{k+1})\text{,}\qquad p\equiv0\ (x<x_c^{k+1})\text{,}\qquad x_c^{k+1}=\cos\theta_c^{k+1}\text{.}
     \label{eq:summary-pressure}
 \end{equation}
 
@@ -291,7 +291,7 @@ The complete system solved at every time level $\tau^{k+1}$ is collected below: 
 
 \emph{Closure, $N+2$ equations for the $N+2$ unknowns $\hat c_0^{k+1},\dots,\hat c_N^{k+1},\theta_c^{k+1}$, using \eqref{eq:summary-states}--\eqref{eq:summary-moments} to express $\eta$, $z_{cm}$, $z_d$ in terms of them:}
 \begin{equation}
-    \int_{x_c^{k+1}}^1\Big[\eta\big(r(\theta,\tau^{k+1}),\tau^{k+1}\big)-z_{cm}^{k+1}+z_d(\theta,\tau^{k+1})\Big](x-x_c^{k+1})^n\,dx=0\text{,}\quad n=0,\dots,N\text{,}
+    \int_{x_c^{k+1}}^1\Big[\eta\big(r(\theta,\tau^{k+1}),\tau^{k+1}\big)-z_{cm}^{k+1}+z_d(\theta,\tau^{k+1})\Big]\,\tilde P_n\big(\psi(x,\tau^{k+1})\big)\,dx=0\text{,}\quad n=0,\dots,N\text{,}
     \label{eq:summary-galerkin}
 \end{equation}
 \begin{equation}
@@ -343,9 +343,9 @@ where $K$ collects every remaining term --- built from $a_m,\dot a_m$ (via \eqre
 \subsection{The acceleration-level Galerkin closure, and what evaluating it requires}
 \label{subsec:accel-galerkin}
 
-\hspace*{1em}Projecting \eqref{eq:accel-constraint} onto the same $(x-x_c)^n$ test functions used in \eqref{eq:galerkin} gives the replacement Galerkin conditions,
+\hspace*{1em}Projecting \eqref{eq:accel-constraint} onto the same $\tilde P_n(\psi(x,\tau))$ test functions used in \eqref{eq:galerkin} gives the replacement Galerkin conditions,
 \begin{equation}
-    \int_{x_c}^1 \ddot C\big(\theta(x),\tau\big)\,(x-x_c)^n\,dx = 0\text{,}\qquad n=0,\dots,N\text{,}
+    \int_{x_c}^1 \ddot C\big(\theta(x),\tau\big)\,\tilde P_n\big(\psi(x,\tau)\big)\,dx = 0\text{,}\qquad n=0,\dots,N\text{,}
     \label{eq:accel-galerkin}
 \end{equation}
 to be solved, together with \eqref{eq:theta-c-crossing} closing the system for $\theta_c$ jointly with $X=(\hat c_0,\dots,\hat c_N,\theta_c)$ (\S\ref{subsubsec:contact-angle} --- tangency is no longer part of this system at all, position-level or otherwise), by the same Newton scheme as \S\ref{subsec:newton}. Every piece of \eqref{eq:accel-constraint} needed to evaluate \eqref{eq:accel-galerkin} is built from quantities already computed in \S\ref{sec:spectral-km}: the $J_0,J_1$ terms in $\Pi$ and $K$ require the same Gauss--Legendre quadrature as $c_m$ and $W_n^{(m)}$ (\S\ref{subsubsec:quadrature}); the Legendre terms use the same quadrature as $b_l$ (\S\ref{subsubsec:polynomial-projections}). No new numerical machinery is required, only a richer integrand.
