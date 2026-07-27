@@ -1,0 +1,17 @@
+# Julia package convention: do not commit resolved Manifest.toml for a package repo
+# (SpectralKM/derivations tooling) -- consumers resolve via Project.toml's [compat].
+Manifest.toml
+
+# LaTeX build artifacts
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.fls
+docs/*.fdb_latexmk
+docs/*.synctex.gz
+
+# Local, machine-specific Claude Code settings
+.claude/settings.local.json
+
+.DS_Store

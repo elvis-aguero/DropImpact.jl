@@ -1,0 +1,370 @@
+\section{A fully spectral kinematic match}
+\label{sec:spectral-km}
+
+\hspace*{1em}We derive a model of droplet--bath contact in which the bath and droplet are represented as coupled spectral oscillator systems, following \cite{AlventosaEtAl2023}; contact is enforced over the entire pressed region and the pressure is solved for directly, following \cite{AgueroEtAl2026}; and the map between the bath's cylindrical coordinate and the droplet's polar angle is used only in its explicit, forward direction. The section is organized as follows: \S\ref{subsec:formulation} fixes notation and the geometric relation between the bath's and droplet's coordinates; \S\ref{subsec:bath} and \S\ref{subsec:drop} state the (unmodified) bath and droplet models; \S\ref{subsec:affine} derives, once, the affine dependence of each interface's state on the pressure induced by implicit time-stepping; \S\ref{subsec:contact} derives the contact closure; \S\ref{subsec:newton} solves it, jointly, by Newton's method; \S\ref{subsec:summary} collects the complete, self-contained system solved at each time step.
+
+\subsection{Governing equations and interface parametrization}
+\label{subsec:formulation}
+
+We use the nondimensionalization of \cite{AlventosaEtAl2023}: length scale $R$ (the undeformed droplet radius), time scale $t_\sigma=\sqrt{\rho R^3/\sigma}$, force scale $2\pi\sigma R$, giving the Weber, Bond and Ohnesorge numbers $\We,\Bo,\Oh$ as defined there. Cylindrical coordinates $(r,z)$ describe the bath, with $z=0$ the undisturbed free surface and gravity acting in $-\hat z$; spherical coordinates $(\xi,\theta)$, sharing the same axis, are centred on the droplet's centre of mass, with $\theta=0$ along $-\hat z$ so that $\theta=0$ is the point of the droplet nearest the bath. The bath interface height and the droplet radius are decomposed as
+\begin{equation}
+    \eta(r,\tau) = \sum_{m=0}^{M} a_m(\tau)\,J_0(k_mr)\text{,}\qquad
+    \xi(\theta,\tau) = 1+\sum_{l=2}^{L}\beta_l(\tau)\,P_l(\cos\theta)\text{,}
+    \label{eq:eta-xi}
+\end{equation}
+and the droplet's centre of mass is at height $z_{cm}(\tau)$ above the undisturbed bath surface. A point on the droplet surface at polar angle $\theta$ lies, in the bath's cylindrical coordinates, at horizontal distance and height
+\begin{equation}
+    r(\theta,\tau) = \xi(\theta,\tau)\sin\theta\text{,}\qquad
+    z_d(\theta,\tau) = \xi(\theta,\tau)\cos\theta
+    \label{eq:forward-map}
+\end{equation}
+below the centre of mass (so a point's absolute height, in the bath's $z$-coordinate, is $z_{cm}(\tau)-z_d(\theta,\tau)$: $z_d(0,\tau)=\xi(0,\tau)>0$ places $\theta=0$ below $z_{cm}$, consistent with it being the point nearest the bath), so that the droplet's underside, at the same instant, meets the bath surface if and only if $\eta(r(\theta,\tau),\tau)=z_{cm}(\tau)-z_d(\theta,\tau)$. Equation~\eqref{eq:forward-map} is a map from $\theta$ to $(r,z_d)$, given explicitly, for any $\theta$, once $\{\beta_l(\tau)\}$ is known; it is never inverted for $\theta$ given $r$ in what follows. We write $x:=\cos\theta$ throughout when convenient, so that $P_l(\cos\theta)=P_l(x)$.
+
+\subsection{Bath interface model}
+\label{subsec:bath}
+
+The bath is governed by the linearized, weakly viscous free-surface equations of \cite{AlventosaEtAl2023}, themselves following \cite{DiasEtAl2008}: with velocity potential $\phi(r,z,\tau)$,
+\begin{equation}
+    \nabla^2\phi+\partial_z^2\phi=0\text{,}\quad z\le0\text{;}\qquad
+    \partial_\tau\eta = \partial_z\phi+2\Oh\nabla^2\eta\text{,}\quad z=0\text{;}
+    \label{eq:bath-pde-1}
+\end{equation}
+\begin{equation}
+    \partial_\tau\phi = -\Bo\,\eta - 2\Oh\,\partial_z^2\phi + \kappa[\eta] - p\text{,}\quad z=0\text{;}\qquad
+    \partial_z\phi=0\text{ at }z=-h_0\text{,}
+    \label{eq:bath-pde-2}
+\end{equation}
+with $\kappa[\eta]=\nabla^2\eta$ the linearized curvature and $h_0$ the (nondimensional) bath depth (at $z=-h_0$, consistent with $z\le0$; \citealt{AlventosaEtAl2023} print $z=h_0$), subject to the no-flux wall condition $\partial_r\eta=\partial_r\phi=0$ at $r=b$. Expanding $\eta$ as in \eqref{eq:eta-xi} on the eigenfunctions of $(\nabla^2+k_m^2)J_0(k_mr)=0$ satisfying $J_0'(k_mb)=0$, and eliminating $\phi$ between \eqref{eq:bath-pde-1} and \eqref{eq:bath-pde-2} mode by mode, gives one damped linear oscillator per bath mode,
+\begin{equation}
+    \ddot a_m + 4\Oh k_m^2 \dot a_m + \left(k_m^2+\Bo\right)k_m\tanh(k_m h_0)\, a_m = -2 k_m \tanh(k_m h_0)\, c_m(\tau)\text{,}\qquad m=0,\dots,M\text{,}
+    \label{eq:bath-mode}
+\end{equation}
+where
+\begin{equation}
+    c_m(\tau) = \frac{2}{(bJ_1(k_m))^2}\int_0^b p(r,\tau)\,r\,J_0(k_mr)\,dr
+    \label{eq:c_m-def}
+\end{equation}
+is the $m$-th Fourier--Bessel coefficient of the actual contact pressure $p$, extended by zero outside the pressed region.
+
+\subsection{Droplet interface model}
+\label{subsec:drop}
+
+The droplet's small-amplitude oscillations about its spherical equilibrium are governed, for a general contact pressure $p(\theta,\tau)$, by the energy balance $\dot T=\dot W-\varepsilon$ of \cite{AlventosaEtAl2023} (their eq.~3.7), with $T$ the sum of kinetic and surface energy of the decomposition \eqref{eq:eta-xi}, $\dot W$ the rate of working of $p$ on the surface, and $\varepsilon$ the viscous dissipation of \cite{lamb1924hydrodynamics}. Substituting \eqref{eq:eta-xi} and using the orthogonality of the $P_l(\cos\theta)$ on $[-1,1]$ gives, mode by mode,
+\begin{equation}
+    \ddot\beta_l + 2\Oh(2l+1)(l-1)\, \dot\beta_l + l(l-1)(l+2)\, \beta_l = -(2l+1)l\, b_l(\tau)\text{,}\qquad l=2,\dots,L\text{,}
+    \label{eq:drop-mode}
+\end{equation}
+where
+\begin{equation}
+    b_l(\tau) = \int_{-1}^1 p(x,\tau)\, P_l(x)\, dx
+    \label{eq:b_l-def}
+\end{equation}
+is the un-normalized Legendre projection of the actual pressure, in the convention \cite{AlventosaEtAl2023} use for the projection $c_l$ of their prescribed shape; here $b_l$ plays the role their product $f(\tau)c_l(\tau)$ played. Modes $l=0$ (excluded by incompressibility of the droplet) and $l=1$ do not appear in \eqref{eq:eta-xi}; $l=1$ is instead governed by the motion of the centre of mass,
+\begin{equation}
+    \dot z_{cm} = v\text{,}\qquad \dot v = \tfrac32 f(\tau) - \Bo\text{,}\qquad f(\tau) = 2\int_0^{r_c(\tau)} p(r,\tau)\, r\, dr\text{,}
+    \label{eq:com}
+\end{equation}
+with $r_c(\tau)$ the (as yet undetermined) contact radius. Under the ansatz $p=fH_r(r/r_c)$ of \cite{AlventosaEtAl2023}, whose normalization $\int_0^b H_r(r/r_c)\,r\,dr=\tfrac12$ they impose, $2\int_0^{r_c}p\,r\,dr=2f\int_0^{r_c}H_r(r/r_c)\,r\,dr=2f\cdot\tfrac12=f$, so \eqref{eq:com} reduces to their own definition of the net contact force $f$ when the shape is prescribed, and generalizes it when it is not.
+
+\subsection{Time discretization: affine response to pressure}
+\label{subsec:affine}
+
+\hspace*{1em}Equations \eqref{eq:bath-mode}, \eqref{eq:drop-mode} and the pair \eqref{eq:com} are each, mode by mode, of the form
+\begin{equation}
+    \ddot x + 2\gamma\dot x+\omega^2x = Fu(\tau)\text{,}
+    \label{eq:generic-ode}
+\end{equation}
+with $x$ one of $a_m,\beta_l,z_{cm}$, $u$ the corresponding pressure moment $c_m,b_l,f$, and $(\gamma,\omega^2,F)$ read off from \eqref{eq:bath-mode}, \eqref{eq:drop-mode}, \eqref{eq:com} respectively:
+\begin{equation}
+    (\gamma,\omega^2,F)_{\text{bath}} = \Big(2\Oh k_m^2,\ (k_m^2+\Bo)k_m\tanh(k_mh_0),\ -2k_m\tanh(k_mh_0)\Big)\text{,}
+    \label{eq:bath-coeffs}
+\end{equation}
+\begin{equation}
+    (\gamma,\omega^2,F)_{\text{drop}} = \Big(\Oh(2l+1)(l-1),\ l(l-1)(l+2),\ -(2l+1)l\Big)\text{,}\qquad
+    (\gamma,\omega^2,F)_{cm} = \left(0,\ 0,\ \tfrac32\right)\text{.}
+    \label{eq:drop-com-coeffs}
+\end{equation}
+We discretize \eqref{eq:generic-ode} in time with the variable-step BDF2 scheme of \cite{AgueroEtAl2026}: with $s^k=\delta_t^k/\delta_t^{k-1}$, $\mathfrak a^k=(1+2s^k)/(1+s^k)$, $b^k=-(1+s^k)$, $c^k=(s^k)^2/(1+s^k)$, and $\dot f^{k+1}\approx(\mathfrak a^kf^{k+1}+b^kf^k+c^kf^{k-1})/\delta_t^k$ for any variable $f$, the first-order system $(x,y{=}\dot x)$ becomes
+\begin{equation}
+    \mathfrak a x^{k+1}+bx^k+cx^{k-1} = \delta\, y^{k+1}\text{,}\qquad
+    \mathfrak a y^{k+1}+by^k+cy^{k-1} = \delta\left(-2\gamma y^{k+1}-\omega^2x^{k+1}+Fu^{k+1}\right)\text{,}
+    \label{eq:bdf2}
+\end{equation}
+where $\delta:=\delta_t^k$ and the step superscript on $\mathfrak a,b,c$ is dropped for brevity. Solving the first equation of \eqref{eq:bdf2} for $y^{k+1}=(\mathfrak a x^{k+1}+bx^k+cx^{k-1})/\delta$ and substituting into the second gives
+\begin{equation}
+    \frac{\mathfrak a}{\delta}\Big(\mathfrak a x^{k+1}+bx^k+cx^{k-1}\Big)+by^k+cy^{k-1}
+    = -2\gamma\Big(\mathfrak a x^{k+1}+bx^k+cx^{k-1}\Big)-\delta\omega^2x^{k+1}+\delta Fu^{k+1}\text{,}
+\end{equation}
+and collecting every term proportional to $x^{k+1}$ on the left,
+\begin{equation}
+    x^{k+1}\left[\frac{\mathfrak a^2}{\delta}+2\gamma\mathfrak a+\delta\omega^2\right]
+    = \delta Fu^{k+1} - \frac{\mathfrak a}{\delta}\big(bx^k+cx^{k-1}\big)-2\gamma\big(bx^k+cx^{k-1}\big)-by^k-cy^{k-1}\text{,}
+\end{equation}
+so that, multiplying through by $\delta$,
+\begin{equation}
+    x^{k+1} = (\text{known history}) + \kappa\,u^{k+1}\text{,}\qquad
+    \kappa = \frac{\delta^2 F}{\mathfrak a^2+2\gamma\mathfrak a\delta+\delta^2\omega^2}\text{.}
+    \label{eq:kappa-general}
+\end{equation}
+Substituting \eqref{eq:bath-coeffs}--\eqref{eq:drop-com-coeffs} into \eqref{eq:kappa-general} gives, explicitly,
+\begin{equation}
+    a_m^{k+1} = \alpha_m^{k+1} + \kappa_m\, c_m^{k+1}\text{,}\qquad
+    \kappa_m = \frac{-2\delta^2 k_m\tanh(k_mh_0)}{\mathfrak a\big(\mathfrak a+4\delta\Oh k_m^2\big)+\delta^2(k_m^2+\Bo)k_m\tanh(k_mh_0)}\text{,}
+    \label{eq:kappa-m}
+\end{equation}
+\begin{equation}
+    \beta_l^{k+1} = \gamma_l^{k+1} + \lambda_l\, b_l^{k+1}\text{,}\qquad
+    \lambda_l = \frac{-\delta^2(2l+1)l}{\mathfrak a\big(\mathfrak a+2\delta\Oh(2l+1)(l-1)\big)+\delta^2l(l-1)(l+2)}\text{,}
+    \label{eq:lambda-l}
+\end{equation}
+\begin{equation}
+    z_{cm}^{k+1} = \mu^{k+1}+\kappa_{cm}\,f^{k+1}\text{,}\qquad \kappa_{cm}=\frac{3\delta^2}{2\mathfrak a^2}\text{,}
+    \label{eq:kappa-cm}
+\end{equation}
+with $\alpha_m^{k+1},\gamma_l^{k+1},\mu^{k+1}$ depending only on $\delta,\mathfrak a,b,c$ and the two preceding time levels. Each of $a_m^{k+1}$, $\beta_l^{k+1}$, $z_{cm}^{k+1}$ is therefore an affine function of the pressure moment forcing it at the same time level; the slopes $\kappa_m,\lambda_l,\kappa_{cm}$ are known once $\delta,\mathfrak a$ are fixed by the time step, and it is this affine dependence that closes the contact problem below into a purely algebraic one at each time step.
+
+\subsection{Modeling contact}
+\label{subsec:contact}
+
+\hspace*{1em}We now determine the pressure and the contact angle $\theta_c(\tau)$ so that the bath and droplet surfaces coincide throughout $[0,\theta_c(\tau)]$.
+
+\subsubsection{Pressure representation}
+We represent the pressure as a polynomial of degree $N$ in $x=\cos\theta$, compactly supported on the pressed region by construction,
+\begin{equation}
+    p(x,\tau) = \sum_{n=0}^{N} \hat c_n(\tau)\, (x-x_c(\tau))^n\text{,}\quad x\ge x_c(\tau)\text{;}\qquad
+    p(x,\tau) \equiv 0\text{,}\quad x<x_c(\tau)\text{,}\qquad x_c(\tau):=\cos\theta_c(\tau)\text{.}
+    \label{eq:pressure-poly}
+\end{equation}
+
+\subsubsection{Full contact}
+Contact over the entire pressed region requires
+\begin{equation}
+    \eta\big(r(\theta,\tau),\tau\big) = z_{cm}(\tau) - z_d(\theta,\tau)\text{,}\qquad 0\le\theta\le\theta_c(\tau)\text{,}
+    \label{eq:full-contact}
+\end{equation}
+with $\eta$, $z_{cm}$, $z_d$ affine in $c_m$, $f$, $b_l$ respectively by \eqref{eq:kappa-m}--\eqref{eq:kappa-cm}. The $N+1$ coefficients $\hat c_n(\tau)$ cannot satisfy \eqref{eq:full-contact} at every $\theta\in[0,\theta_c(\tau)]$; we impose it in the weighted-residual sense obtained by projecting the mismatch onto the $N+1$ polynomials used in \eqref{eq:pressure-poly},
+\begin{equation}
+    \int_{x_c}^1 \Big[\eta\big(r(\theta,\tau),\tau\big) - z_{cm}(\tau) + z_d(\theta,\tau)\Big]\,(x-x_c)^n\, dx = 0\text{,}\qquad n=0,\dots,N\text{,}
+    \label{eq:galerkin}
+\end{equation}
+$N+1$ equations. By \eqref{eq:lambda-l}, $\beta_l(\tau)=\gamma_l(\tau)+\lambda_lb_l(\tau)$, and $b_l(\tau)=\int_{x_c}^1p(x,\tau)P_l(x)\,dx$ depends on $\hat c_n(\tau)$ alone --- not on $\eta$, $r$, or $z_d$ --- so $\beta_l(\tau)$ is an explicit function of the same unknowns \eqref{eq:galerkin} is solving for. Substituting it makes \eqref{eq:galerkin} genuinely nonlinear in $\hat c_n(\tau)$: $\beta_l(\tau)$ enters $\xi$, hence $r(\theta,\tau)$, hence $J_0\big(k_mr(\theta,\tau)\big)$ inside $\eta$ (through $c_m(\tau)$, \S\ref{subsubsec:quadrature} below), and $J_0$ composed with an affine function of $\hat c_n(\tau)$ is not itself affine. \eqref{eq:galerkin}, together with \eqref{eq:theta-c-crossing} below closing the system for $\theta_c(\tau)$ jointly with $\hat c_n(\tau)$, is solved by the nonlinear solve of \S\ref{subsec:newton}; we first evaluate the four projections entering \eqref{eq:galerkin} and \eqref{eq:c_m-def} through $z_d$, $z_{cm}$ and $\eta$, each as an explicit function of $\hat c_n(\tau)$ and $\theta_c(\tau)$, in turn.
+
+\subsubsection{The closed-form projections}
+The centre-of-mass and droplet-surface contributions to \eqref{eq:com}, \eqref{eq:b_l-def} and \eqref{eq:galerkin} involve only $\xi$, hence only polynomials in $x$, and are closed form. Define the antiderivative
+\begin{equation}
+    H_l^{(k)}(x) := \int x^kP_l(x)\,dx\text{,}\qquad H_l^{(0)}=F_l:=\frac{P_{l+1}-P_{l-1}}{2l+1}\text{,}\qquad
+    H_l^{(k)} = \frac{(l+1)H_{l+1}^{(k-1)}+l\,H_{l-1}^{(k-1)}}{2l+1}\text{,}\ k\ge1\text{,}
+    \label{eq:bonnet}
+\end{equation}
+the second relation following from $x\,P_l(x)=\big[(l+1)P_{l+1}(x)+lP_{l-1}(x)\big]/(2l+1)$ applied to $x^{k-1}P_l$ and integrated; \eqref{eq:bonnet} is the extension, to arbitrary polynomial order, of the linear-order antiderivatives $F_l,G_l$ used by \cite{AgueroEtAl2026} in their operator $\mathbf L(\ell)$ (their App.~A): at $k=0$ it agrees with their $F_l=(P_{l+1}-P_{l-1})/(2l+1)$, and at $k=1$ it gives the antiderivative of $xP_l(x)$ correctly, $H_l^{(1)}=\big[(l+1)F_{l+1}+lF_{l-1}\big]/(2l+1)$, which corrects an apparent subscript slip in the corresponding formula as printed in their App.~A ($G_l=[(l+1)F_l+lF_{l-1}]/(2l+1)$, which cannot equal $\int xP_l\,dx$ on grounds of polynomial degree alone). Expanding $(x-x_c)^n=\sum_{j=0}^n\binom nj x^j(-x_c)^{n-j}$ gives, exactly,
+\begin{equation}
+    \int_{x_c}^1(x-x_c)^nP_l(x)\,dx = \sum_{j=0}^n\binom nj(-x_c)^{n-j}\Big[H_l^{(j)}(1)-H_l^{(j)}(x_c)\Big]\text{,}
+    \label{eq:b_l-closed}
+\end{equation}
+which is $b_l(\tau)$ of \eqref{eq:b_l-def} once multiplied by $\hat c_n(\tau)$ and summed over $n$, and using $x(x-x_c)^n=(x-x_c)^{n+1}+x_c(x-x_c)^n$ gives, by the same formula applied at degree $n+1$ and $n$,
+\begin{equation}
+    \int_{x_c}^1z_d(\theta,\tau)(x-x_c)^n\,dx
+    = \int_{x_c}^1x\Big[1+\sum_{l=2}^L\beta_l(\tau)P_l(x)\Big](x-x_c)^n\,dx\text{,}
+    \label{eq:drop-galerkin-term}
+\end{equation}
+the droplet contribution to \eqref{eq:galerkin}, likewise closed form. The centre-of-mass integral in \eqref{eq:com} is closed form for the same reason: since $r(x,\tau)^2=\xi(x,\tau)^2(1-x^2)$ is itself a polynomial in $x$ (the $\sqrt{1-x^2}$ in $\sin\theta$ cancels once squared), $2\int_0^{r_c}p\,r\,dr=-\int_{x_c}^1p(x,\tau)\,d\big[r(x,\tau)^2\big]$ is a polynomial-times-polynomial integral, evaluated by the same binomial expansion used above. The minus sign is not optional: $\theta=0$ (the pole, $r=0$) corresponds to $x=1$, and $\theta=\theta_c$ (the contact edge, $r=r_c$) corresponds to $x=x_c<1$, so $r$ \emph{increases} as $x$ \emph{decreases} over the contact patch; substituting $r\to x$ in $\int_0^{r_c}(\cdot)\,d[r^2]$ and reorienting the limits from $(1,x_c)$ to the natural $(x_c,1)$ introduces exactly this sign. Omitting it makes the pressure force accelerate the droplet further into the bath rather than decelerating it — confirmed by evaluating both sides directly for a constant test pressure $p\equiv1$, where the unsigned form returns $-r_c^2$ against the correct $2\int_0^{r_c}r\,dr=+r_c^2$.
+
+\subsubsection{The quadrature projections}
+\label{subsubsec:quadrature}
+The bath-side projection $c_m$ of \eqref{eq:c_m-def} and the bath contribution to \eqref{eq:galerkin} both involve $J_0\big(k_mr(x,\tau)\big)$, and $J_0$ composed with the non-polynomial map $r(x,\tau)=\xi(\arccos x,\tau)\sqrt{1-x^2}$ has no elementary antiderivative. We evaluate
+\begin{equation}
+    c_m(\tau) = \frac{2}{(bJ_1(k_m))^2}\int_{x_c}^1 p(x,\tau)\, J_0\!\big(k_mr(x,\tau)\big)\, r(x,\tau)\,\Big|\frac{dr}{dx}\Big|\, dx\text{,}\qquad
+    W_n^{(m)}(\tau) := \int_{x_c}^1 J_0\!\big(k_mr(x,\tau)\big)(x-x_c)^n\,dx
+    \label{eq:c_m-Wn}
+\end{equation}
+by $n_q$-point Gauss--Legendre quadrature on $[x_c,1]$: with $\{s_i,w_i\}_{i=1}^{n_q}$ the standard nodes and weights on $[-1,1]$ and the affine map $x=x_c+(1+s)(1-x_c)/2$,
+\begin{equation}
+    \int_{x_c}^1 g(x)\,dx \approx \frac{1-x_c}{2}\sum_{i=1}^{n_q} w_i\, g\!\left(x_c+\frac{(1+s_i)(1-x_c)}{2}\right)\text{,}
+    \label{eq:gauss-quad}
+\end{equation}
+applied to $g$ equal to the integrand of $c_m$ and, separately, of $W_n^{(m)}$. No root is found in evaluating \eqref{eq:gauss-quad}: $r(x,\tau)$ is a forward evaluation of \eqref{eq:forward-map} at each quadrature abscissa, not an inversion, and no unknown of the problem is attached to an abscissa; \eqref{eq:c_m-Wn} is one definite integral per $(m,n)$, feeding linearly into \eqref{eq:bath-mode} and \eqref{eq:galerkin} respectively, in exactly the sense that any spectral method evaluates a forcing term that is not itself expressible in the trial basis by quadrature. With \eqref{eq:c_m-Wn}, the bath contribution to \eqref{eq:galerkin} is $\sum_m a_m(\tau)\,W_n^{(m)}(\tau)$.
+
+\subsubsection{The contact angle: a geometric crossing condition}
+\label{subsubsec:contact-angle}
+
+\hspace*{1em}The single remaining unknown is $\theta_c(\tau)$. Write
+\begin{equation}
+    C(\theta,\tau) := \eta\big(r(\theta,\tau),\tau\big)-z_{cm}(\tau)+z_d(\theta,\tau)
+    \label{eq:pointwise-residual-sec3}
+\end{equation}
+for the pointwise contact mismatch (the same quantity \S\ref{subsec:hidden-constraints}'s \eqref{eq:pointwise-residual} defines, at fixed $\theta$, for the acceleration-level closure; introduced here under its own label since this subsection precedes that one). The classical closing condition for a free boundary of this kind is tangency --- smooth pasting between the pressed and unpressed regions, $\partial_\theta C(\theta_c,\tau)=0$. This is not viable here. By \eqref{eq:eta-xi}, $\xi(\theta,\tau)$ depends on $\theta$ only through $\cos\theta$, hence is even in $\theta$ for \emph{every} $\theta$, not merely near the axis; $r(\theta,\tau)=\xi(\theta,\tau)\sin\theta$ is therefore odd; $\eta(r(\theta,\tau),\tau)=\sum_ma_m(\tau)J_0(k_mr)$ is even, since $J_0$ is an even function of its (here, odd-in-$\theta$) argument, so the composition is even; and $z_d(\theta,\tau)=\xi(\theta,\tau)\cos\theta$ is even$\times$even, hence even. Every formula composing $C(\theta,\tau)$ ($\cos\theta$, $\sin\theta$, $J_0$, the finite Legendre sum in $\xi$) is entire and defined for every real $\theta$, not merely $\theta\in[0,\pi]$, so this parity statement --- and the ``odd, $2\pi$-periodic'' language used next --- is a genuine global identity about the analytic extension of $C$ to all of $\mathbb R$, not an extra assumption smuggled in by extending the physical domain. So $C(\theta,\tau)$ is even in $\theta$ at every $\theta$ and every physical state, and its $\theta$-derivative is therefore odd and $2\pi$-periodic, forcing
+\begin{equation}
+    \partial_\theta C(0,\tau)\equiv0\text{,}\qquad \partial_\theta C(\pi,\tau)\equiv0
+    \label{eq:tangency-degenerate}
+\end{equation}
+identically, for \emph{any} $a_m,\beta_l$ whatsoever: an odd, $2\pi$-periodic function vanishes at both its fixed points under $\theta\mapsto-\theta$. Near $\theta=0$, $\partial_\theta C(\theta)=C''(0)\theta+O(\theta^3)$ is, to leading order, an affine function through the origin for any state, so Newton's method applied to $\partial_\theta C=0$ finds the trivial root $\theta_c=0$ as its nearest zero essentially independent of the physics --- not a bad initial guess, but the correct behaviour of a root-finder on a residual that is genuinely, structurally affine-through-zero there. This was confirmed directly: joint Newton solves seeded at $\theta_c^{(0)}\in\{0.02,\dots,0.5\}$, at various levels of accumulated contact history, all converged to $\theta_c\sim10^{-8}$.
+
+Tangency (smooth pasting between the constrained and unconstrained solutions) is, in the Signorini/obstacle-problem theory this contact closure otherwise resembles, normally a \emph{consequence} of a well-posed complementarity condition on the free boundary --- pressure non-negative in contact, the gap vanishing there --- not an independent equation imposed on top of one. We impose the gap-vanishing condition itself, directly: $\theta_c(\tau)$ is a $\theta$ at which the bath and droplet profiles, both evolved under the current trial pressure via \eqref{eq:kappa-m}--\eqref{eq:lambda-l} and traced through \eqref{eq:forward-map}, meet,
+\begin{equation}
+    C\big(\theta_c(\tau),\tau\big) = 0\text{,}
+    \label{eq:theta-c-crossing}
+\end{equation}
+with $C$ evaluated using the pressure trial's own $a_m,\beta_l$ (an entirely different state dependence from the extrapolated $a_m^k,\beta_l^k$ \S\ref{subsec:accel-galerkin} uses inside $K$ --- that extrapolation is unrelated to \eqref{eq:theta-c-crossing} and unaffected by this change). This is the natural analogue, in a continuous joint-Newton setting, of \cite{AlventosaEtAl2023}'s own treatment of the case where the pressure is not an assumed shape (their comparison, in the same paper, to a ``full kinematic match'' that circumvents the pressure-shape assumption \cite{AgueroEtAl2026} builds on): they determine the contact radius geometrically, as the crossing of two independently-evolved interfaces, rather than from an assumed pressure shape or a slope-matching condition. Crucially, $C$ itself is generically \emph{nonzero} at $\theta=0,\pi$ --- it is even about both poles, but that makes it a generic, state-dependent quantity there rather than a structural zero, in contrast to $\partial_\theta C$, which is odd about both poles and hence structurally zero (\eqref{eq:tangency-degenerate}). \eqref{eq:theta-c-crossing} therefore closes the system without the degeneracy tangency carries.
+
+$\theta_c(\tau)$ is a genuine Newton unknown, jointly with $\hat c_n(\tau)$, not a separate function of $\hat c_n(\tau)$ alone: the pressure $p(x;X)$ \eqref{eq:pressure-poly} is supported only on $x\ge x_c=\cos\theta_c$, so $b_l(X),c_m(X)$ --- and, through them, $a_m(X),\beta_l(X)$, and $C$ itself --- all depend on $\theta_c$ through their own integration bounds, not only on $\hat c_n$. Any scheme that instead treats $\theta_c(X)$ as an explicit, sequentially-computable function of $\hat c_n$ alone (e.g.\ via a largest-crossing search performed \emph{after} $a_m(X),\beta_l(X)$) is circular, since those quantities cannot be evaluated without already knowing $\theta_c$. Keeping $\theta_c$ in $X$ avoids this by construction.
+
+\emph{Multiplicity.} Evenness about $\theta=0$ maps a zero $\theta^*\in(0,\pi)$ of \eqref{eq:theta-c-crossing} to $-\theta^*\notin(0,\pi)$, and evenness about $\theta=\pi$ maps it to $2\pi-\theta^*\notin(0,\pi)$ --- neither symmetry produces a second zero \emph{inside} the physical domain, so parity about the two poles does not by itself imply multiple roots of \eqref{eq:theta-c-crossing} there. Multiplicity is nonetheless possible for the same reason disclosed for the joint Newton solve generally (\S\ref{subsec:newton} below): $\eta(r(\theta,\tau),\tau)=\sum_ma_m(\tau)J_0(k_mr(\theta,\tau))$ is a sum of genuinely oscillatory functions of $\theta$ once $k_mr$ is not small, so $C(\theta,\tau)$ can cross zero more than once on $(0,\pi)$. This is the same oscillatory-$J_0$, possibly-multi-rooted risk \S\ref{subsec:newton} discloses for the joint system as a whole, handled the same way --- by monitoring convergence and checking the converged $\theta_c$ against the previous time level's for continuity.
+
+Existence of at least one root of \eqref{eq:theta-c-crossing} on $(0,\pi)$, for a state genuinely in contact, follows from the intermediate value theorem: $C(0,\tau)=\sum_ma_m(\tau)-z_{cm}(\tau)+\xi(0,\tau)$ is (minus) the gap at the pole --- the pole's absolute height is $z_{cm}(\tau)-\xi(0,\tau)$ by \eqref{eq:full-contact}'s convention, so the gap (height above the bath) is $z_{cm}(\tau)-\xi(0,\tau)-\eta(0,\tau)=-C(0,\tau)$, which is \emph{negative} exactly when the droplet's south pole has already penetrated the bath (the point is below the bath surface) --- equivalently, $C(0,\tau)$ itself is positive exactly under that same condition --- the geometric onset-of-contact condition this whole closure presupposes (contact is not being sought at all when this fails; free flight governs the dynamics instead). Given genuine contact at the pole, $C(\theta,\tau)$ must also become negative before $\theta=\pi$: a positive $C$ all the way to $\pi$ would mean the two surfaces overlap everywhere, violating \eqref{eq:check-nonintersect} not merely at some $\theta$ but at every $\theta$, which is not a state this document's kinematic-match premise (finite, localized contact) admits. Given $C(0,\tau)>0$ and $C(\theta,\tau)<0$ for some $\theta<\pi$, continuity of $C$ in $\theta$ (immediate from continuity of $\cos\theta,\sin\theta,J_0$, and the finite Legendre sum defining $\xi$) gives a crossing: a root of \eqref{eq:theta-c-crossing} exists in $(0,\pi)$. This is a plausibility check on the closure, not a claim that any particular Newton iterate finds this root rather than a spurious one; that risk is the multi-rootedness risk discussed above and in \S\ref{subsec:newton}.
+
+\emph{Conditioning.} \eqref{eq:theta-c-crossing} is built from $\eta,z_{cm},z_d$ --- the same position-level quantities whose $O(\delta^2)$ pressure sensitivity motivates the acceleration-level fix in \S\ref{sec:accel-closure}. Its derivative with respect to $\theta_c$ is $O(1)$ (the geometry itself, not the pressure response, since $\theta_c$ is a raw coordinate of $X$ and never flows through the BDF2 affine relations \eqref{eq:kappa-m}--\eqref{eq:kappa-cm}), but its derivatives with respect to $\hat c_0,\dots,\hat c_N$ inherit the same $O(\delta^2)$-suppressed $\kappa_m,\lambda_l$ sensitivities \S\ref{subsec:accel-motivation} identifies, via the chain rule through $a_m(X),\beta_l(X)$ --- confirmed symbolically (\texttt{derivations/verify\_accel\_closure.jl}: $\partial C/\partial a_m$ and $\partial C/\partial\beta_l$ are themselves genuinely $O(1)$ and free of $\kappa_m,\lambda_l$, so multiplying through the chain rule leaves an overall $O(\delta^2)$ sensitivity, not merely asserted). This leaves one structurally lopsided row and column in the Jacobian $J$ of \eqref{eq:newton-step}, even once the Galerkin rows are replaced by their acceleration-level counterparts (\S\ref{sec:accel-closure}). Direct numerical measurement (\texttt{derivations/verify\_crossing\_conditioning.jl}, sweeping $\delta$ over four decades at fixed $N$, two representative contact histories) shows this single lopsided row does \emph{not} reintroduce the $\delta$-dependence the acceleration-level fix removes: $\mathrm{cond}(J)$ stays flat to within a few percent across the whole $\delta$ range tested, versus growing by six orders of magnitude over the same range for the position-level Galerkin rows it replaces. This one row is therefore not a live $\delta$-conditioning risk in practice.
+
+\subsubsection{What is not enforced}
+Equation~\eqref{eq:galerkin}, together with \eqref{eq:theta-c-crossing}'s determination of $\theta_c$, does not by itself guarantee two properties that a physically admissible contact solution must have; each must be checked against the computed $\hat c_n(\tau)$ once solved, exactly as \cite{AlventosaEtAl2023} check loss of contact from the sign of $f(\tau)$. Positivity of the pressure throughout the pressed region,
+\begin{equation}
+    p(x,\tau) = \sum_{n=0}^N\hat c_n(\tau)(x-x_c(\tau))^n \ge 0\text{,}\qquad x\in[x_c(\tau),1]\text{,}
+    \label{eq:check-positivity}
+\end{equation}
+is not implied. Non-intersection of the two surfaces beyond the selected crossing,
+\begin{equation}
+    \eta\big(r(\theta,\tau),\tau\big) < z_{cm}(\tau)-z_d(\theta,\tau)\text{,}\qquad \theta\in(\theta_c(\tau),\pi]\text{,}
+    \label{eq:check-nonintersect}
+\end{equation}
+is likewise not implied by \eqref{eq:theta-c-crossing} alone (only that $C=0$ at $\theta_c$ itself --- $C$ could still re-cross zero, or fail to hold the correct sign, at some $\theta>\theta_c$, a possibility \S\ref{subsubsec:contact-angle}'s multiplicity discussion already flags rather than rules out). Nor does \eqref{eq:pressure-poly} constrain the value of the pressure at the edge of contact: $p(x_c,\tau)=\hat c_0(\tau)$ is generally nonzero, admitting a jump in $p$ across $\theta_c(\tau)$. This is not obviously a defect: \cite{AlventosaEtAl2023}'s own review of direct numerical simulation and prior experimental work on this exact problem (not solid-solid Hertzian contact) finds the true pressure distribution during impact to be closer to flat/top-hat-shaped than singular at the edge, which is why they fit a high-order (sixth-degree), not low-order or singular, polynomial shape function --- so a smooth or singular vanishing at $\theta_c$ is not obviously the correct target to design toward here, and whether the computed $\hat c_0(\tau)$ is small, large, or comparable to \cite{AgueroEtAl2026}'s own edge pressure is a property of the solution, established once \eqref{eq:galerkin} and \eqref{eq:theta-c-crossing} are solved, not a constraint to impose in advance.
+
+\subsection{Simultaneous solution by Newton's method}
+\label{subsec:newton}
+
+\hspace*{1em}Collect the unknowns of the contact problem at time level $\tau^{k+1}$ into a single vector --- $\theta_c^{k+1}$ IS among them, exactly as in the tangency-based formulation this replaces (\S\ref{subsubsec:contact-angle} explains why: $p(x;X)$'s own support depends on $\theta_c$, so $b_l(X),c_m(X),a_m(X),\beta_l(X)$ cannot be evaluated without already knowing $\theta_c$, making a "compute $\theta_c$ from the rest of $X$" scheme circular rather than a directed acyclic chain):
+\begin{equation}
+    X := \big(\hat c_0^{k+1},\dots,\hat c_N^{k+1},\theta_c^{k+1}\big)\in\mathbb R^{N+2}\text{.}
+    \label{eq:newton-unknowns}
+\end{equation}
+Every other quantity used in \eqref{eq:galerkin} and \eqref{eq:theta-c-crossing} is an explicit function of $X$, computed in the following order with no step depending on a quantity not yet computed: $p(x;X)$ from \eqref{eq:pressure-poly}, using $x_c=\cos\theta_c^{k+1}$ directly from $X$; $b_l(X)$ and the droplet contribution to \eqref{eq:galerkin} from \eqref{eq:b_l-closed}--\eqref{eq:drop-galerkin-term}, using only $p(x;X)$ and $x_c$; $\beta_l(X)=\gamma_l^{k+1}+\lambda_lb_l(X)$ from \eqref{eq:lambda-l}; $\xi(x;X)=1+\sum_l\beta_l(X)P_l(x)$, $r(x;X)=\xi(x;X)\sqrt{1-x^2}$, $z_d(x;X)=\xi(x;X)x$ from \eqref{eq:eta-xi}--\eqref{eq:forward-map}; $c_m(X)$, $W_n^{(m)}(X)$ from \eqref{eq:c_m-Wn}, using $r(x;X)$; $a_m(X)=\alpha_m^{k+1}+\kappa_mc_m(X)$ from \eqref{eq:kappa-m}; and $f(X)$, $z_{cm}(X)=\mu^{k+1}+\kappa_{cm}f(X)$ from \eqref{eq:com}, \eqref{eq:kappa-cm}. Nothing in this list requires $X$ to be known beyond what is already available at each step --- $x_c$, in particular, is read directly off $X$'s last component, never computed from the others --- so the list is a directed acyclic chain, not a set of mutually dependent equations, and every quantity in it is computable from $X$ alone by direct evaluation.
+
+Define the residual $R:\mathbb R^{N+2}\to\mathbb R^{N+2}$,
+\begin{equation}
+    R_n(X) := \int_{x_c}^1\Big[\eta\big(r(\theta,\tau^{k+1};X),\tau^{k+1}\big)-z_{cm}(X)+z_d(\theta,\tau^{k+1};X)\Big](x-x_c)^n\,dx\text{,}\quad n=0,\dots,N\text{,}
+    \label{eq:newton-residual-galerkin}
+\end{equation}
+\begin{equation}
+    R_{N+1}(X) := C\big(\theta_c^{k+1},\tau^{k+1};X\big) = \eta\big(r(\theta_c^{k+1},\tau^{k+1};X),\tau^{k+1}\big) - z_{cm}(X) + z_d(\theta_c^{k+1},\tau^{k+1};X)\text{,}
+    \label{eq:newton-residual-crossing}
+\end{equation}
+using $\eta(r,\tau^{k+1})=\sum_ma_m(X)J_0(k_mr)$ throughout and $x_c=\cos\theta_c^{k+1}$ read directly from $X$ (\eqref{eq:newton-residual-crossing} is \eqref{eq:theta-c-crossing} restated as one further row of $R$). The contact problem is $R(X)=0$, solved by Newton's method,
+\begin{equation}
+    X^{(j+1)} = X^{(j)} - J\big(X^{(j)}\big)^{-1}R\big(X^{(j)}\big)\text{,}\qquad J:=\frac{\partial R}{\partial X}\text{,}
+    \label{eq:newton-step}
+\end{equation}
+to convergence, with the previous time level's converged $X$ as the natural warm start, since $\hat c_n$ and $\theta_c$ vary continuously through a bounce except at the onset and loss of contact.
+
+Because every arrow in the chain above --- polynomial evaluation, the Bonnet recursion \eqref{eq:bonnet}, Gauss--Legendre quadrature \eqref{eq:gauss-quad}, and $J_0,J_1$ with their standard derivative recurrences $J_0'=-J_1$, $J_1'=J_0-J_1/x$ --- is an elementary or special-function composition and none is a linear solve, an implicit root, or a search procedure, $R$ is differentiable by direct automatic differentiation of the same computation that evaluates it: each column of $J$ is a forward-mode directional derivative of $R$ along one coordinate of $X$, and no adjoint rule for an intermediate solve is needed. $\theta_c^{k+1}$ here is simply the last coordinate of $X$, differentiated the same way every other coordinate is --- no special-casing is needed because $\theta_c$ is an input to $R$, not an output of a nested computation, so no implicit-function-theorem sensitivity is required anywhere in this Jacobian. Forming $J$ this way costs $N+2$ such passes, each itself $O(M+L+n_q)$ in the mode and quadrature counts, negligible next to a single time step's mode update; the one linear solve in the entire procedure is \eqref{eq:newton-step}'s own $J(X^{(j)})\Delta X^{(j)}=-R(X^{(j)})$, exactly as for any Newton iteration on a genuinely nonlinear system.
+
+Equation~\eqref{eq:newton-step} carries no global convergence guarantee. $R(X)$ is built from $J_0\big(k_mr(\theta,\tau;X)\big)$, an oscillatory function of an argument affine in $\{\hat c_n\}$, jointly across all $N+2$ unknowns; Newton's method on such a system converges, in general, only locally, and nothing derived here rules out convergence to a root of $R$ other than the physically relevant one, since the oscillatory dependence on $X$ through $J_0$ can in principle admit more than one nearby zero --- including, per \S\ref{subsubsec:contact-angle}'s own multiplicity discussion, more than one root of \eqref{eq:theta-c-crossing} itself along $\theta$. This must be checked numerically --- by monitoring the residual norm and step size across the iteration, and by comparing the converged $X$ against the previous time level's for continuity --- distinct from the positivity and non-intersection conditions of the previous subsection, which concern whether an already-computed solution is physically admissible, not whether the iteration finds one.
+
+\subsection{Model summary}
+\label{subsec:summary}
+
+The complete system solved at every time level $\tau^{k+1}$ is collected below: $N+2$ equations, \eqref{eq:summary-galerkin} and \eqref{eq:summary-theta-c}, for the $N+2$ unknowns $X=(\hat c_0^{k+1},\dots,\hat c_N^{k+1},\theta_c^{k+1})$, solved simultaneously by \eqref{eq:newton-step}, together with the states, geometry and pressure moments that \S\ref{subsec:newton} shows to be explicit functions of $X$ alone.
+
+\emph{States, advanced from \eqref{eq:kappa-m}--\eqref{eq:kappa-cm} given the pressure moments at $\tau^{k+1}$:}
+\begin{equation}
+    a_m^{k+1}=\alpha_m^{k+1}+\kappa_mc_m^{k+1}\ (m=0,\dots,M)\text{,}\quad
+    \beta_l^{k+1}=\gamma_l^{k+1}+\lambda_lb_l^{k+1}\ (l=2,\dots,L)\text{,}\quad
+    z_{cm}^{k+1}=\mu^{k+1}+\kappa_{cm}f^{k+1}\text{.}
+    \label{eq:summary-states}
+\end{equation}
+
+\emph{Geometry, given the state:}
+\begin{equation}
+    r(\theta,\tau^{k+1})=\xi(\theta,\tau^{k+1})\sin\theta\text{,}\qquad z_d(\theta,\tau^{k+1})=\xi(\theta,\tau^{k+1})\cos\theta\text{,}\qquad
+    \xi=1+\textstyle\sum_l\beta_l^{k+1}P_l(\cos\theta)\text{.}
+    \label{eq:summary-geometry}
+\end{equation}
+
+\emph{Pressure and contact angle, the primary unknowns of the contact problem, $\hat c_0^{k+1},\dots,\hat c_N^{k+1}$ and $\theta_c^{k+1}$ --- $\theta_c^{k+1}$ is a component of $X$, not computed from the rest of it (\S\ref{subsubsec:contact-angle}):}
+\begin{equation}
+    p(x,\tau^{k+1})=\sum_{n=0}^N\hat c_n^{k+1}(x-x_c^{k+1})^n\ (x\ge x_c^{k+1})\text{,}\qquad p\equiv0\ (x<x_c^{k+1})\text{,}\qquad x_c^{k+1}=\cos\theta_c^{k+1}\text{.}
+    \label{eq:summary-pressure}
+\end{equation}
+
+\emph{Pressure moments feeding \eqref{eq:summary-states}, computed from \eqref{eq:summary-pressure} via \eqref{eq:b_l-closed} (closed form) and \eqref{eq:c_m-Wn}, \eqref{eq:gauss-quad} (quadrature):}
+\begin{equation}
+    c_m^{k+1}=\tfrac{2}{(bJ_1(k_m))^2}\!\int_{x_c^{k+1}}^1\! p\,J_0(k_mr)\,r\Big|\tfrac{dr}{dx}\Big|dx\text{,}\quad
+    b_l^{k+1}=\!\int_{x_c^{k+1}}^1\! p\,P_l(x)\,dx\text{,}\quad
+    f^{k+1}=-\!\int_{x_c^{k+1}}^1\! p\,d\big[r^2\big]\text{.}
+    \label{eq:summary-moments}
+\end{equation}
+
+\emph{Closure, $N+2$ equations for the $N+2$ unknowns $\hat c_0^{k+1},\dots,\hat c_N^{k+1},\theta_c^{k+1}$, using \eqref{eq:summary-states}--\eqref{eq:summary-moments} to express $\eta$, $z_{cm}$, $z_d$ in terms of them:}
+\begin{equation}
+    \int_{x_c^{k+1}}^1\Big[\eta\big(r(\theta,\tau^{k+1}),\tau^{k+1}\big)-z_{cm}^{k+1}+z_d(\theta,\tau^{k+1})\Big](x-x_c^{k+1})^n\,dx=0\text{,}\quad n=0,\dots,N\text{,}
+    \label{eq:summary-galerkin}
+\end{equation}
+\begin{equation}
+    \eta\big(r(\theta_c^{k+1},\tau^{k+1}),\tau^{k+1}\big) - z_{cm}^{k+1} + z_d(\theta_c^{k+1},\tau^{k+1}) = 0\text{.}
+    \label{eq:summary-theta-c}
+\end{equation}
+
+Solving \eqref{eq:newton-step} for $X$ closes the system at each time step, after which \eqref{eq:summary-states} gives the states $a_m^{k+1},\beta_l^{k+1},z_{cm}^{k+1}$ used to build $R(X)$ in the first place, \eqref{eq:summary-geometry} gives the interface shapes, and \eqref{eq:check-positivity}--\eqref{eq:check-nonintersect} are checked against the result. The pressure $\{\hat c_n\}$ and the contact extent $\theta_c$ are solved for directly, jointly, exactly as \S\ref{subsubsec:contact-angle} explains is necessary (the pressure's own support depends on $\theta_c$, so nothing downstream of it can be evaluated without $\theta_c$ already being known); $\eta$, $\xi$ and $p$ remain finite spectral sums throughout; \eqref{eq:forward-map} is used only forward; and the bath's, droplet's and pressure's mutual dependence is resolved by one joint Newton iteration over $X$.
+
+\section{An acceleration-level closure}
+\label{sec:accel-closure}
+
+\hspace*{1em}Implementing \S\ref{sec:spectral-km} exposed a defect in \eqref{eq:galerkin} that no amount of numerical safeguarding around the Newton solve can cure, because it is not a numerical-conditioning problem in the ordinary sense: it is a consequence of the differential order at which the contact condition is imposed. This section identifies the mechanism, derives the fix, and states precisely what the fix does and does not address.
+
+\subsection{Why the position-level closure cannot be well conditioned}
+\label{subsec:accel-motivation}
+
+\hspace*{1em}By \eqref{eq:kappa-general}, $a_m^{k+1}$, $\beta_l^{k+1}$ and $z_{cm}^{k+1}$ respond to the pressure moment forcing them with slope $\kappa=\delta^2F/(\mathfrak a^2+2\gamma\mathfrak a\delta+\delta^2\omega^2)$ --- $O(\delta^2)$ in the time step $\delta$. This is not an artifact of the discretization; it is the correct physical statement that a position variable governed by a second-order ODE can only change by $O(\delta^2)$ in response to a force introduced within the current step, since force acts on acceleration directly, velocity only after one integration, position only after two. Equation~\eqref{eq:galerkin} is built entirely from $\eta$, $z_{cm}$, $z_d$ --- position-level quantities --- so its sensitivity to the very unknowns it is solving for is bounded by this same $O(\delta^2)$, and no choice of pressure basis (monomial in $x-x_c$, or any other polynomial basis obtained from it by a linear change of variable) can remove this, since a basis change is a linear recombination of the same $N+1$ columns and cannot alter their shared $O(\delta^2)$ scaling. Direct measurement confirms this: the Jacobian's second singular value scales as $\delta^2$ across four decades of $\delta$, and $\mathrm{cond}(J)$ grows by roughly four orders of magnitude per additional pressure mode at fixed $\delta$: $5\times10^5$ at $N{=}0$, $5\times10^9$ at $N{=}1$, $1.4\times10^{14}$ at $N{=}2$, $7\times10^{17}$ at $N{=}3$. A direct simulation comparison across $N=0,\dots,3$ at fixed $M,L,\delta$ confirmed this is not merely a poorly scaled but ultimately convergent system: the predicted trajectories at $N{=}0$ and $N{=}1$ were bit-identical, $N{=}2$ produced a qualitatively different and unphysical trajectory (the droplet's centre of mass rising above the undisturbed bath level while the model reports it in contact), and $N{=}3$ differed from $N{=}2$ by an $O(1)$ amount --- no trend consistent with convergence in $N$. Restricting the pressure to a fixed, low $N$ because that is where the Newton solve remains tractable would therefore reproduce, by another route, exactly the assumed-pressure-shape restriction \S\ref{sec:spectral-km} exists to remove: it would not be a converged truncation, it would be an unexamined one.
+
+The fix is to stop enforcing contact through a position-level quantity whose sensitivity to the current pressure is bounded by construction, and instead enforce it through a quantity that is not: the acceleration.
+
+\subsection{The hidden velocity- and acceleration-level constraints}
+\label{subsec:hidden-constraints}
+
+\hspace*{1em}Define the pointwise contact residual at fixed $\theta$ (not fixed $x$, so that differentiating in $\tau$ does not require tracking the moving boundary $\theta_c(\tau)$),
+\begin{equation}
+    C(\theta,\tau) := \eta\big(r(\theta,\tau),\tau\big) - z_{cm}(\tau) + \xi(\theta,\tau)\cos\theta\text{,}
+    \label{eq:pointwise-residual}
+\end{equation}
+which \eqref{eq:full-contact} requires to vanish for $0\le\theta<\theta_c(\tau)$ throughout contact (the $+\xi\cos\theta$ sign, not $-\xi\cos\theta$: a droplet-surface point at polar angle $\theta$, measured --- \S\ref{subsec:formulation} --- from $-\hat z$, lies at absolute height $z_{cm}-\xi\cos\theta$, since $\theta=0$ is the point nearest the bath and increasing $\theta$ moves the point upward relative to the centre of mass; $C:=\eta-(\text{height})=\eta-z_{cm}+\xi\cos\theta$). Write $\xi_\tau(\theta,\tau):=\sum_l\dot\beta_l(\tau)P_l(\cos\theta)$ and $\xi_{\tau\tau}(\theta,\tau):=\sum_l\ddot\beta_l(\tau)P_l(\cos\theta)$ --- the same Legendre sum defining $\xi$, with velocity and acceleration coefficients in place of $\beta_l$ --- so that $r_\tau=\xi_\tau\sin\theta$, $r_{\tau\tau}=\xi_{\tau\tau}\sin\theta$ (both at fixed $\theta$). Differentiating \eqref{eq:pointwise-residual} once in $\tau$, using $J_0'=-J_1$,
+\begin{equation}
+    \dot C = \sum_m\dot a_mJ_0(k_mr) - r_\tau\sum_ma_mk_mJ_1(k_mr) - \dot z_{cm} + \xi_\tau\cos\theta\text{,}
+    \label{eq:velocity-constraint}
+\end{equation}
+which must vanish for $0\le\theta<\theta_c(\tau)$ whenever \eqref{eq:pointwise-residual} does --- the velocity-level hidden constraint. Differentiating once more, using $J_1'(x)=J_0(x)-J_1(x)/x$,
+\begin{equation}
+    \ddot C = \sum_m\ddot a_mJ_0(k_mr) - 2r_\tau\sum_m\dot a_mk_mJ_1(k_mr) - r_\tau^2\sum_ma_mk_m^2\Big[J_0(k_mr)-\frac{J_1(k_mr)}{k_mr}\Big] - r_{\tau\tau}\sum_ma_mk_mJ_1(k_mr) - \ddot z_{cm} + \xi_{\tau\tau}\cos\theta\text{.}
+    \label{eq:accel-constraint-raw}
+\end{equation}
+The bracketed term is finite at $r=0$ ($\theta=0$, the axis): $J_1(x)/x\to\tfrac12$ as $x\to0$, so $J_0(k_mr)-J_1(k_mr)/(k_mr)\to\tfrac12$ there, exactly the kind of removable singularity already handled once in this document (\S\ref{subsec:contact}'s $r\,dr/dx$ cancellation); no special-casing beyond using this limit is needed.
+
+Substituting the governing ODEs \eqref{eq:bath-mode}, \eqref{eq:drop-mode}, \eqref{eq:com} for $\ddot a_m$, $\ddot z_{cm}$, and for $\ddot\beta_l$ --- which must be substituted at \emph{both} places $\xi_{\tau\tau}$ occurs in \eqref{eq:accel-constraint-raw}, once directly in $+\xi_{\tau\tau}\cos\theta$ and once inside $r_{\tau\tau}=\xi_{\tau\tau}\sin\theta$ in $-r_{\tau\tau}\sum_ma_mk_mJ_1(k_mr)$ --- and collecting every term proportional to a pressure moment,
+\begin{equation}
+    \ddot C = \underbrace{-2\sum_mk_m\tanh(k_mh_0)J_0(k_mr)\,c_m(\tau) \;-\; \tfrac32f(\tau) \;+\; \Big[{-\cos\theta}+\sin\theta\sum_ma_mk_mJ_1(k_mr)\Big]\sum_l(2l{+}1)l\,P_l(\cos\theta)\,b_l(\tau)}_{\Pi(\theta,\tau)\ :=\ \text{pressure-dependent}} \;+\; K(\theta,\tau)\text{,}
+    \label{eq:accel-constraint}
+\end{equation}
+where $K$ collects every remaining term --- built from $a_m,\dot a_m$ (via \eqref{eq:bath-mode}'s damping and stiffness coefficients) and $\beta_l,\dot\beta_l$ (via \eqref{eq:drop-mode}'s, and via the $\dot a_m\dot\beta_l$ and $\dot\beta_l^2$ terms of \eqref{eq:accel-constraint-raw}, which carry no $c_m,b_l,f$ dependence at all), and $\Bo$ --- none of it multiplying $c_m,b_l,f$. The pressure enters $\Pi$ directly from the governing ODEs' own right-hand sides, with no time integration standing between them: $\Pi$'s dependence on $c_m(\tau),b_l(\tau),f(\tau)$ is $O(1)$ in $\delta$, not $O(\delta^2)$ --- the $b_l(\tau)$ coefficient is state-dependent (through $\sum_ma_mk_mJ_1(k_mr)$) rather than a bare constant, but it carries no $\delta$-dependence either, so this does not weaken the claim. This is the entire content of the fix: nothing about the pressure representation changed, only the differential order of the condition used to determine it.
+
+\subsection{The acceleration-level Galerkin closure, and what evaluating it requires}
+\label{subsec:accel-galerkin}
+
+\hspace*{1em}Projecting \eqref{eq:accel-constraint} onto the same $(x-x_c)^n$ test functions used in \eqref{eq:galerkin} gives the replacement Galerkin conditions,
+\begin{equation}
+    \int_{x_c}^1 \ddot C\big(\theta(x),\tau\big)\,(x-x_c)^n\,dx = 0\text{,}\qquad n=0,\dots,N\text{,}
+    \label{eq:accel-galerkin}
+\end{equation}
+to be solved, together with \eqref{eq:theta-c-crossing} closing the system for $\theta_c$ jointly with $X=(\hat c_0,\dots,\hat c_N,\theta_c)$ (\S\ref{subsubsec:contact-angle} --- tangency is no longer part of this system at all, position-level or otherwise), by the same Newton scheme as \S\ref{subsec:newton}. Every piece of \eqref{eq:accel-constraint} needed to evaluate \eqref{eq:accel-galerkin} is built from quantities already computed in \S\ref{sec:spectral-km}: the $J_0,J_1$ terms in $\Pi$ and $K$ require the same Gauss--Legendre quadrature as $c_m$ and $W_n^{(m)}$ (\S\ref{subsubsec:quadrature}); the Legendre terms are closed form via the same Bonnet recursion \eqref{eq:bonnet} used for $b_l$. No new numerical machinery is required, only a richer integrand.
+
+One design choice is not optional and must be stated precisely, because getting it wrong would silently undo the entire fix. Evaluating \eqref{eq:accel-galerkin} at $\tau=\tau^{k+1}$ requires values for every occurrence of $a_m,\dot a_m,\beta_l,\dot\beta_l$ appearing in $K$ --- and if these are supplied by the same BDF2 relations \eqref{eq:kappa-m}--\eqref{eq:lambda-l} used elsewhere in this document ($a_m^{k+1}=\alpha_m^{k+1}+\kappa_mc_m^{k+1}$, an $O(\delta^2)$-sensitive function of the very pressure being solved for), the $O(\delta^2)$ suppression this section exists to remove would reappear inside $K$, defeating the purpose. $K$ must instead be evaluated using state extrapolated from the last converged time level $\tau^k$ alone (e.g. $a_m^k,\dot a_m^k$ directly, or a first-order Taylor extrapolation in $\delta$) --- never through \eqref{eq:kappa-m}--\eqref{eq:lambda-l} at the new step.
+
+The same precision is needed for $\Pi$ itself, not only $K$: $\Pi$ has two distinct outer occurrences requiring extrapolation, not one, so the rule below is stated generally rather than pinned to a single named term. $\Pi$'s first term contains $J_0\big(k_mr(\theta,\tau)\big)$, and $\Pi$'s third term contains, in its bracket $-\cos\theta+\sin\theta\sum_ma_mk_mJ_1\big(k_mr(\theta,\tau)\big)$, both $a_m(\tau)$ directly and $r(\theta,\tau)=\xi(\theta,\tau)\sin\theta$ through $J_1$'s argument: every one of these is the same kind of \emph{outer} (Galerkin-angle-$\theta$) state dependence that appears throughout $K$, as opposed to the \emph{inner} occurrence of $\beta_l$ already nested inside $c_m(\tau)$'s own established quadrature definition (\eqref{eq:c_m-Wn}, unchanged from \S\ref{subsec:contact}) --- $a_m$ has no such inner occurrence anywhere in $c_m(\tau)$'s or $b_l(\tau)$'s definitions; every occurrence of $a_m$ in this closure is outer and requires extrapolation --- whose dependence on current-step $\beta_l(X)$ is exactly what makes $c_m,b_l,f$'s $O(1)$ pressure sensitivity real (\S\ref{subsec:accel-motivation}). Every outer occurrence --- $\xi,\beta_l$ inside $K$ and inside $\Pi$'s $J_0(k_mr(\theta,\tau))$; $a_m$ and $\xi,\beta_l$ (via $r$) inside $\Pi$'s $-\cos\theta+\sin\theta\sum_ma_mk_mJ_1(k_mr(\theta,\tau))$ bracket alike --- must be extrapolated from $\tau^k$, never built from $a_m(X)$ or $\beta_l(X)$ at the new step: doing otherwise would attach an additional $O(\delta^2)$-suppressed term to $\partial\Pi/\partial\hat c_n$ at each such occurrence (via $\partial J_0(k_mr)/\partial\beta_l\cdot\partial\beta_l(X)/\partial\hat c_n\sim\lambda_l=O(\delta^2)$ for the first term, and via both $\partial a_m(X)/\partial\hat c_n\sim\kappa_m=O(\delta^2)$ and the analogous $\beta_l(X)$-dependence of $r$ for the third), superposed on the genuinely $O(1)$ term from $c_m,b_l,f$ themselves. Subordinate to the leading order as $\delta\to0$ in every case, and so not a reopening of \S\ref{subsec:accel-motivation}'s catastrophic failure, but exactly the kind of unpinned channel this document does not otherwise leave ambiguous; stating the rule generally, rather than only for the term first noticed, is the point of stating it at all. Only the pressure moments $c_m,b_l,f$ themselves (via their own established, current-step-dependent inner definitions) and the eventual advancement of $a_m^{k+1},\beta_l^{k+1},z_{cm}^{k+1}$ once $X$ is known (via \eqref{eq:summary-states}, an ordinary forward evaluation, not a matrix inversion) use the current step's pressure. This makes the resulting scheme a predictor-corrector-like hybrid --- state extrapolated explicitly, pressure solved implicitly --- rather than a pure implicit BDF2 step, and its own accuracy and stability have not been established here and must be checked, not assumed, exactly as \S\ref{subsec:newton}'s Newton-convergence risk and \S\ref{subsec:contact}'s admissibility conditions already are.
+
+\subsection{What this does not fix}
+\label{subsec:accel-open}
+
+\hspace*{1em}One problem originally listed here is resolved; one remains open.
+
+\emph{Tangency is not used here, and why.} A tangency closure, $\partial C/\partial\theta=0$ at $\theta_c$ solved jointly with pressure as one further Newton unknown, would carry the same $O(\delta^2)$ pressure sensitivity \eqref{eq:galerkin} had before this section's own fix, and removing that sensitivity by the same route --- differentiating the closing equation once more in $\tau$ --- does not work, for a reason independent of differential order: $\xi(\theta,\tau)$ depends on $\theta$ only through $\cos\theta$, so $C(\theta,\tau)$ (\eqref{eq:pointwise-residual-sec3}) is even in $\theta$ at \emph{every} $\theta$, not just near the axis, for \emph{every} physical state --- an exact global identity. Hence $\partial_\theta C$ is odd and $2\pi$-periodic, vanishing identically at both $\theta=0$ and $\theta=\pi$ regardless of $a_m,\beta_l$; near $\theta=0$ it is locally affine through zero for any state, so a Newton iteration on it finds the trivial root as its nearest zero essentially independent of the physics. This was confirmed directly (joint solves from seeds spanning $0.02$ to $0.5$, at various levels of accumulated history, all converged to $\theta_c\sim10^{-8}$). Differentiating tangency's equation further in $\tau$ cannot fix a defect present at the level of the un-differentiated equation itself. \S\ref{subsubsec:contact-angle} instead closes the system with $C(\theta_c,\tau)=0$ itself (\eqref{eq:theta-c-crossing}) --- unlike $\partial_\theta C$, $C$ is generically nonzero at both $\theta=0,\pi$ (only its derivative has the structural zero), so this closing equation is not subject to the same degeneracy. $\theta_c$ is a genuine joint Newton unknown throughout ($X\in\mathbb R^{N+2}$): the pressure $p(x;X)$ is supported only on $x\ge x_c$, so quantities needed to evaluate $C$ depend on $\theta_c$ through their own integration bounds, and any scheme computing $\theta_c$ as a function of $\hat c_n$ alone, separately from and after those quantities, is circular for exactly this reason. Keeping $\theta_c$ in $X$ avoids the circularity by construction.
+
+\emph{Drift --- still open.} This section's fix (\S\ref{subsec:accel-galerkin}) does not solve the pointwise contact condition $C=0$ (\eqref{eq:pointwise-residual}) or its time-derivative $\dot C=0$ directly; it solves the SECOND time-derivative, $\ddot C=\Pi+K=0$, in a weighted-residual (Galerkin) sense. $K$ is the part of $\ddot C$ that does not depend on the pressure being solved for at the current step --- built instead from the bath and drop's state AT THE PREVIOUS step ($a_m^k,\beta_l^k$ and their rates, per \S\ref{subsec:accel-galerkin}'s own extrapolation rule), never re-derived from the current $X$. Solving $\ddot C=0$ guarantees only that $C$ stays at whatever value it already had; it does nothing to correct $C$ back toward zero if it has already drifted away from it, and nothing in the scheme as derived here ever checks or corrects that drift --- a well-known failure mode of exactly this kind of construction (differentiating a constraint instead of imposing it directly), classically called \emph{hidden constraint drift}. The natural fix is a coordinate-projection correction: adjust $a_m,\beta_l,z_{cm}$ back onto $C=0,\dot C=0$ after each accepted step, without re-solving for pressure, so the correction itself is a well-conditioned linear operation --- in preference to Baumgarte-type damping terms, which would reintroduce exactly the kind of unexamined free parameter this section was written to avoid. Neither the projection's construction nor its effect on long-time accuracy is worked out here.
+
+\emph{$N$-scaling --- still open, and not fixed by this section.} The acceleration-level closure removes the Jacobian's dependence on $\delta$ (confirmed numerically, \S\ref{subsubsec:contact-angle}'s Conditioning remark): $\mathrm{cond}(J)$ stays flat as $\delta$ shrinks. It does \emph{not}, however, remove the separate ill-conditioning identified in \S\ref{subsec:accel-motivation} as growing with the pressure truncation order $N$ at fixed $\delta$. Direct measurement (\texttt{derivations/verify\_crossing\_conditioning.jl}, same two representative contact histories, fixed $\delta=10^{-3}$) shows $\mathrm{cond}(J)$ for the acceleration-level system growing from $O(10^3)$ at $N{=}0$ to $O(10^{13})$ at $N{=}3$ --- roughly four orders of magnitude better than the position-level system's $\mathrm{cond}(J)$ at the same $N$ (which reaches $O(10^{17})$), but still far past the point where a double-precision Newton solve is trustworthy. Practically, this caps usable pressure truncation at $N=1$, marginally $N=2$, regardless of the acceleration-level fix: a genuinely growing spectral pressure representation, as opposed to a fixed low-order polynomial in another guise, requires a separate fix to this $N$-scaling specifically, not a consequence of anything derived in this section. Since this scaling appears already in the position-level system and survives the acceleration-level fix largely unchanged in kind (only in magnitude), it is not a $\delta$-conditioning issue at all, and a change of pressure basis --- ruled out as a fix for the $\delta$-scaling in \S\ref{subsec:accel-motivation} on the grounds that a linear change of variable cannot alter the columns' shared scaling in $\delta$ --- is not excluded by that same argument as a fix for the $N$-scaling, which is a question of the basis functions' mutual conditioning (Vandermonde-like collinearity between successive powers of $x-x_c$ or $\psi$) rather than their scaling in $\delta$. This is not resolved here.
+
+Implementation has traced a concrete failure mode to exactly this gap, independent of the tangency issue above (the crossing rule that replaces tangency uses the CURRENT step's $a_m,\beta_l$, not the frozen state $K$ uses --- these are two different state dependencies in two different places, and fixing the first does not touch the second). Because $a_m^k,\beta_l^k$ never receive a pressure kick large enough to move them appreciably from one step to the next (their own sensitivity to the current step's pressure is the same $O(\delta^2)$ discussed in \S\ref{subsec:accel-motivation}), $K$ stays anchored near its bare gravitational value regardless of how far the geometry has actually penetrated. The Galerkin projection $\Pi+K=0$ is then satisfied by whatever small $\hat c_n$ balances this small $K$ --- not by the $O(1)$ pressure a real, deepening impact requires --- and the resulting trajectory does not decelerate or rebound. This is the dominant obstruction to a physically bounded trajectory found in implementation to date, not a residual accuracy concern: the coordinate-projection fix above (or an equivalent explicit mechanism tying the just-solved shape back into $K$) is a precondition for this closure to produce a rebound at all, not a refinement to add once one is already observed.

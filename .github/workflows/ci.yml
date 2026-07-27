@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  julia-tests:
+    name: SpectralKM test suite (Julia ${{ matrix.julia-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        julia-version: ["1.10"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: julia
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          project: julia
+
+  cas-derivations:
+    name: CAS re-derivation scripts (Symbolics.jl)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.10"
+      - uses: julia-actions/cache@v2
+      - name: Instantiate derivations/ project
+        run: julia --project=derivations -e 'using Pkg; Pkg.instantiate()'
+      - name: Run verify_accel_closure.jl
+        run: julia --project=derivations derivations/verify_accel_closure.jl
