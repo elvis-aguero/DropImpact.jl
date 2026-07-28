@@ -257,18 +257,30 @@ function main()
 
     # FIXED inset ranges, over the whole run: the pressure axis must not move between
     # frames or the inset cannot be read as a time series.
-    rc_max, pmin, pmax = 1e-9, 0.0, 1e-12
+    #
+    # ROBUST, not min/max. The onset transient carries a pressure spike an order of
+    # magnitude above the rest of the impact -- the per-frame maximum has median 1.04 and
+    # 90th percentile 1.50, but reaches 14.4 at t = 0.0025 while the contact patch is still
+    # tiny. Scaling the axis to that peak flattens the other 97% of the run into the
+    # baseline. The axis is therefore set from percentiles and the curve is clamped to it,
+    # so the handful of onset frames peg the top of the panel instead of dictating it.
+    fmax = Float64[]; fmin = Float64[]; rc_max = 1e-9
     for lv in levels
         lv.X === nothing && continue
         thc = lv.X[end]; thc <= 0 && continue
         chat = lv.X[1:p.N+1]; xc = cos(thc)
+        vs = [pressure_poly_raw(chat, xc, x) for x in range(xc, 1.0; length=110)]
+        push!(fmax, maximum(vs)); push!(fmin, minimum(vs))
         for x in range(xc, 1.0; length=110)
-            v = pressure_poly_raw(chat, xc, x)
-            pmin = min(pmin, v); pmax = max(pmax, v)
             rc_max = max(rc_max, forward_map_r(lv.drop.beta, acos(clamp(x, -1, 1)), p.L))
         end
     end
-    @printf("  fixed inset ranges: r in [0, %.4f], p in [%.4f, %.4f]\n", rc_max, pmin, pmax)
+    pct(v, q) = (sort(v))[clamp(cld(round(Int, q * length(v)), 1), 1, length(v))]
+    pmax = isempty(fmax) ? 1.0 : 1.25 * pct(fmax, 0.90)
+    pmin = isempty(fmin) ? 0.0 : min(0.0, 1.25 * pct(fmin, 0.10))
+    nclip = count(v -> v > pmax, fmax)
+    @printf("  fixed inset ranges: r in [0, %.4f], p in [%.4f, %.4f]  (%d of %d frames clipped)\n",
+            rc_max, pmin, pmax, nclip, length(fmax))
 
     # resample uniformly in time so the video plays at constant physical rate
     nframes = 400
