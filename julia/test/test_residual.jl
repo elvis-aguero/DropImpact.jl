@@ -26,7 +26,13 @@
         Jad = ForwardDiff.jacobian(R, chat0)
         n = length(chat0)
         Jfd = zeros(p.N + 1, n)
-        h = 1e-7
+        # h = 1e-7 is too SMALL here, which is the opposite of the usual worry. R is
+        # O(1e-3) while its derivatives are O(1e-2 * dt^2) ~ 1e-8, so the differencing
+        # amplifies roundoff by 1/(2h): at h = 1e-7 that is ~5e-13 of noise on entries of
+        # ~1e-8, i.e. ~1e-4 relative -- right at the tolerance, and it failed CI. A larger
+        # step trades truncation error (negligible, R is smooth in chat) for a 100x lower
+        # noise floor.
+        h = 1e-5
         for j in 1:n
             Xp = copy(chat0); Xp[j] += h
             Xm = copy(chat0); Xm[j] -= h
@@ -38,7 +44,7 @@
         # are ~1e-13). An entrywise atol tight enough to be meaningful for the leading entry
         # is meaningless for the trailing one; comparing norms tests the same thing without
         # asserting anything about numerical dust.
-        @test norm(Jad - Jfd) / norm(Jad) < 1e-4
+        @test norm(Jad - Jfd) / norm(Jad) < 1e-5
     end
 
     @testset "Galerkin matrix is dominated by its symmetric part" begin
