@@ -398,20 +398,39 @@ curves, since the former supersede the latter. At $M=L=60$, $N=3$, $n_q=40$,
 $\delta_{\text{init}}=10^{-3}$:
 
 \begin{center}
-\begin{tabular}{lccc}
- & model & reference & discrepancy \\
-coefficient of restitution & $0.2996$ & $0.3043$ & $1.5\%$ \\
-contact time & $4.2624$ & $4.4074$ (DNS) & $3.3\%$ \\
-maximum droplet width & $1.113$ & $1.117$ (DNS) & $0.4\%$ \\
-maximum contact radius & $0.8183$ & $0.8821$ (DNS) & $7.2\%$ \\
+\begin{tabular}{lccccc}
+series & $n$ & mean $|$err$|$ & max $|$err$|$ & RMS & RMS/bar \\
+droplet top & 60 & $0.1345$ & $0.2503$ & $0.1526$ & $1.52$ \\
+droplet bottom & 39 & $0.1055$ & $0.2580$ & $0.1221$ & $1.22$ \\
+combined & 99 & $0.1231$ & $0.2580$ & $0.1414$ & $1.41$ \\
 \end{tabular}
 \end{center}
 
-Pointwise over the whole trajectory, the mean absolute deviation is $0.0104$ for the
-droplet width against DNS (on a range of $0.974$--$1.117$), $0.1345$ for the position of
-the droplet's top and $0.1055$ for its bottom against experiment (on ranges of $1.5$ and
-$1.36$ respectively). The trajectory is physically bounded and rebounds: the centre of
-mass enters contact at $v=-1.047$ and leaves at $v=+0.314$.
+against a measurement uncertainty whose median half-bar is $0.1004$ (quartiles $0.0810$
+and $0.1179$, from 293 digitised bar caps). The model tracks the measured trajectory at
+about $1.4$ times the experimental error bar --- the same order as the measurement
+scatter, but outside it, so the residual is model error rather than noise. The trajectory
+is physically bounded and rebounds: the centre of mass enters contact at $v=-1.047$ and
+leaves at $v=+0.314$.
+
+What can \emph{not} be validated this way must be said plainly, because an earlier
+revision of this section reported it as though it could. The dataset contains no measured
+contact radius and no measured droplet width; both exist only as DNS and 1PKM series,
+verified by reading the digitiser projects that generated them, each of which holds
+exactly two datasets. Any statement about contact radius is therefore a comparison against
+another computation rather than against measurement, and is additionally sensitive to
+definition: the DNS contact radius is thresholded on the trapped gas film, whereas
+$\theta_c$ here bounds the kinematically matched region, and the two need not coincide.
+
+With that caveat the contact-radius behaviour is still worth recording. Against DNS the
+model's $r_c$ peaks at $\tau\approx0.89$ against $1.46$, and refining $M$ and $L$ moves
+that by only $0.02$, so it is not a resolution effect. But the early peak is partly a
+property of this class of reduced model rather than of this model alone: 1PKM peaks at
+$\tau\approx1.22$, also early against the same DNS. Normalised by contact time, the peak
+falls at $0.20$ of the way through contact here, $0.26$ for 1PKM and $0.33$ for DNS --- so
+this model is more skewed than 1PKM, in the same direction, with no measurement available
+to adjudicate. Whether the remainder is a defect of the closure or a mismatch of
+definitions is open.
 
 Two discrepancies are larger than the rest and are recorded rather than explained. The
 contact radius is $7\%$ low at its maximum, and --- more tellingly --- reaches that maximum

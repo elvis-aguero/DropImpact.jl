@@ -115,27 +115,42 @@ julia --project=. scripts/validate_trajectory.jl   # vs experiment + DNS
 julia --project=. scripts/validate_sweep.jl        # rebound metrics vs We
 ```
 
-`validate_trajectory.jl` compares against the experimental and DNS records that
-accompany the full-KM paper (archived in the sister repository
-`km-dropplet-onto-bath`), which supersede the reduced curves of the 1PKM paper.
-At `M = L = 60`, `N = 3`:
+Validation is against **measurement**, not against another model. The reference
+is `data/reference/experimental/` — the droplet top and bottom trajectories with
+error bars, from the experiments that supersede Alventosa et al. (2023). See that
+directory's `PROVENANCE.md`.
 
-| | model | reference | error |
-|---|---|---|---|
-| coefficient of restitution | 0.2996 | 0.3043 | 1.5 % |
-| contact time | 4.2624 | 4.4074 (DNS) | 3.3 % |
-| maximum droplet width | 1.113 | 1.117 (DNS) | 0.4 % |
-| maximum contact radius | 0.8183 | 0.8821 (DNS) | 7.2 % |
+```
+experimental uncertainty from 293 digitised bar caps: median 0.1004 (quartiles 0.0810, 0.1179)
 
-Pointwise over the trajectory the mean absolute deviation is 0.0104 for the
-droplet width against DNS, 0.1345 for the position of the droplet's top and
-0.1055 for its bottom against experiment.
+series         n     mean|err|  max|err|   RMS        RMS/bar
+droplet top    60    0.1345     0.2503     0.1526     1.52
+droplet bottom 39    0.1055     0.2580     0.1221     1.22
+combined       99    0.1231     0.2580     0.1414     1.41
+```
 
-One discrepancy is open and is not a resolution effect: the contact radius
-reaches its maximum at `τ ≈ 0.89` against the DNS value `τ ≈ 1.46`, and doubling
-`M` and `L` moves that by 0.02. The patch grows and recedes too quickly even
-though the total contact time is accurate to 3 %. Refining `N` makes the peak
-*worse*, which points at the unresolved pressure profile as the mechanism.
+The model tracks the measured trajectory at about 1.4 times the experimental
+error bar — the same order as the measurement uncertainty, but outside it, so the
+residual is model error rather than scatter.
+
+**What cannot be validated against experiment, and is therefore not claimed.**
+The dataset contains no measured contact radius and no measured droplet width;
+both exist only as DNS and 1PKM series (verified by reading the WebPlotDigitizer
+projects — each contains exactly two datasets, `*_DNS` and `*_1PKM`). Comparisons
+of those quantities are model-to-simulation, and additionally definition-sensitive:
+the DNS contact radius is thresholded on the trapped gas film, whereas this
+model's `θ_c` bounds the kinematically matched region. `validate_trajectory.jl`
+still reports them for information; they are not validation.
+
+On that footing the contact-radius discrepancy needs restating. Against DNS the
+model's `r_c` peaks at `τ ≈ 0.89` versus `1.46`, and doubling `M` and `L` moves
+that by 0.02, so it is not a resolution effect. But the early peak is partly a
+property of this class of reduced model rather than of this model alone: 1PKM
+peaks at `τ ≈ 1.22`, also early against the same DNS. Normalising by contact
+time, the peak falls at 0.20 of the way through contact here, 0.26 for 1PKM and
+0.33 for DNS. So the model is more skewed than 1PKM but in the same direction,
+and there is no measurement to adjudicate between them. Whether the remainder is
+a defect or a definition mismatch is open.
 
 There is also an isolated performance pathology, and it is *not* a low-Weber
 trend as an earlier note here claimed. Timed across the range at `M = L = 60`:
