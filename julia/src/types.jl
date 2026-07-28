@@ -68,19 +68,34 @@ the bath eigenvalues and the Fourier-Bessel weight (design doc eq:bessel-norm):
             default.
 
   `:pinned` `η = 0` at `r = b`: the free surface is pinned at the triple point, with its
-            wall slope free. Eigenvalues are the zeros of `J_0` and the weight is
-            `2/(b J_1(k_m b))²` — which is, incidentally, the expression
-            AlventosaEtAl2023 print for their (free) bath.
+            wall slope free. Eigenvalues are the zeros of `J_0` (there is no `k_0 = 0`
+            mode — a surface pinned on its whole boundary cannot translate uniformly) and
+            the weight is `2/(b J_1(k_m b))²`. That is the Dirichlet normalizer whose form
+            AlventosaEtAl2023 print for their (free) bath, though not their exact
+            expression: they evaluate `J_1` at `k_m` rather than `k_m b`, a second and
+            independent error.
 
-KNOWN LIMITATION OF `:pinned`. The velocity potential shares this horizontal basis, since
-`∂η/∂τ = ∂φ/∂z` couples them, and `∂φ/∂r` at the wall goes like `J_1(k_m b)`, which for
-this eigenvalue set is O(1) rather than zero — measured 0.52, 0.34, 0.27, 0.23 for the
-first four modes. The no-flux wall condition is therefore violated at leading order: this
-basis pins the surface exactly at the cost of letting the wall leak. See
-`derivations/feasibility_pinned_contact_line.jl`, which quantifies this and describes the
-alternative (keep the `:free` basis and impose pinning with a Lagrange multiplier, which
-honours no-flux exactly but cannot represent a nonzero wall slope). Neither route is
-without cost; `:pinned` is the one implemented here.
+!!! warning "`:pinned` does not conserve bath volume. Use it as a diagnostic, not physics."
+    A mode displaces volume `∫_0^b J_0(k_m r) r dr = (b/k_m) J_1(k_m b)`. For the `:free`
+    eigenvalues `J_1(k_m b) = 0` by definition, so every non-piston mode is volume-neutral
+    and the one volume-carrying mode (the piston) has `κ_0 = 0` and can never be driven:
+    volume conservation is structural. For `:pinned` every mode carries volume and nothing
+    constrains the sum. Measured over the reference impact, `|∫_0^b η r dr|` stays at
+    5e-15 for `:free` but reaches 2.79 for `:pinned` — 17.5 R³ of bath volume created from
+    nothing, four times the droplet's own 4π/3. For a model built to transfer displaced
+    volume into capillary waves that is disqualifying.
+
+    `:pinned` also violates no-flux at leading order (`∂φ/∂r ∝ J_1(k_m b)`, O(1) here),
+    and the closure diagnostics of the design doc §subsec:contact — self-adjointness,
+    semidefiniteness, conditioning, the tangency root — are all `:free` measurements that
+    have NOT been repeated for `:pinned`.
+
+    The consistent formulation is instead to keep the `:free` basis and impose pinning with
+    a multiplier (the rim line force), which conserves volume exactly since `κ_0 = 0`. It is
+    the recommended route and is not yet implemented. Note also that no-flux walls freeze
+    the wall slope to O(Oh) in a rigid container, so a time-varying wall slope is not
+    something a consistent model needs to represent in the first place. See
+    `derivations/feasibility_pinned_contact_line.jl` for the derivations and measurements.
 """
 function Params(; We, Bo, Oh, M, L, N, b, h0, nq, wall::Symbol=:free)
     wall in (:free, :pinned) || throw(ArgumentError("wall must be :free or :pinned, got $wall"))

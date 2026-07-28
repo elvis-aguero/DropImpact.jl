@@ -17,10 +17,78 @@ function max_penetration_depth(levels::Vector{Level}, L::Integer)
 end
 
 """
+    contact_intervals(times, phases) -> Vector{NamedTuple}
+
+The maximal contiguous runs of `InContact`, each as `(t_start, t_end, duration, nsteps)`.
+
+This exists because a single impact does NOT produce a single interval, and the difference
+matters for the headline metric. Measured at We=1.0958, M=L=60, N=3, dt_max=0.02, one impact
+yields five intervals: the physical contact, 0 -> 3.6293 over 187 steps, followed by four
+re-entries of 3 to 8 steps each. Three of the four are separated from their predecessor by a
+gap of exactly `dt_init`, which is the signature of the `just_left` guard in
+`run_simulation`: it forces one advancing free-flight step after contact ends, after which
+onset is immediately re-detected. That is stepper chatter at detachment, not bouncing.
+
+Three different scalars can therefore be called "the contact time", and they disagree by
+17%: the first interval's duration (3.629), the sum over all intervals (3.815), and the
+first-to-last span (4.263, which also swallows a 0.446-long free-flight excursion). Report
+`primary_contact_time` and say so; the span is the one number that should never be used.
+"""
+function contact_intervals(times::Vector{Float64}, phases::Vector{Phase})
+    ivs = NamedTuple{(:t_start, :t_end, :duration, :nsteps),
+                     Tuple{Float64,Float64,Float64,Int}}[]
+    i = 1
+    while i <= length(phases)
+        if phases[i] == InContact
+            j = i
+            while j + 1 <= length(phases) && phases[j+1] == InContact
+                j += 1
+            end
+            # Contact began between step i-1 and i, so the interval opens at times[i-1].
+            t0 = times[max(i - 1, 1)]
+            push!(ivs, (; t_start=t0, t_end=times[j], duration=times[j] - t0, nsteps=j - i + 1))
+            i = j + 1
+        else
+            i += 1
+        end
+    end
+    return ivs
+end
+
+"""
+    primary_contact_time(times, phases) -> value
+
+Duration of the LONGEST contiguous contact interval: the physical impact, excluding both
+the detachment chatter and any later re-contact. This is the headline contact time and the
+metric to converge in `M`, `L`, `N` and `dt_max`. Returns `0.0` if contact never occurred.
+
+Preferred over [`contact_time`](@ref) because it is the one of the three candidate
+definitions (see [`contact_intervals`](@ref)) that measures a single physical event.
+
+The longest interval rather than the *first*, which is a distinction that only matters when
+something is wrong -- and then matters a lot. At converged settings the physical impact IS
+the first interval and the two agree exactly. But an under-resolved run chatters from the
+very beginning: at `M = L = 20`, `nq = 16` the first interval is 0.0081 long out of eight
+intervals, so "first" reports a contact time three orders of magnitude too small while
+"longest" still finds the impact. Taking the longest also makes the diagnostic
+self-checking: if [`contact_intervals`](@ref) shows the longest interval is not the first,
+the run is chattering at onset and the truncation is too coarse to trust.
+"""
+function primary_contact_time(times::Vector{Float64}, phases::Vector{Phase})
+    ivs = contact_intervals(times, phases)
+    return isempty(ivs) ? 0.0 : maximum(iv.duration for iv in ivs)
+end
+
+"""
     contact_time(times, phases) -> value
 
-Total duration spent with `phase==InContact`, summed over contiguous contact
-intervals (there may be more than one bounce in a longer run)."""
+Total duration spent with `phase==InContact`, summed over contiguous contact intervals.
+
+Note this sums the detachment chatter documented in [`contact_intervals`](@ref) along with
+the physical contact, so it overestimates the impact duration (3.815 against 3.629 in the
+reference case). Use [`primary_contact_time`](@ref) for the headline metric; this remains
+the right quantity when the total time under load is what is wanted, e.g. for a dissipation
+budget."""
 function contact_time(times::Vector{Float64}, phases::Vector{Phase})
     total = 0.0
     for i in 2:length(times)

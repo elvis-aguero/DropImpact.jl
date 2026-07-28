@@ -257,6 +257,11 @@ function run_simulation(p::Params; t_end::Float64, dt_init::Float64=1e-3,
     hist = SimHistory(lvl0, lvl0)
     levels = Level[lvl0]
     diag = NamedTuple[]
+    # One phase label per accepted level, so that `levels` and `phases` stay index-aligned.
+    # `diag` cannot serve this purpose: it carries a row per CONTACT step only, so it is
+    # shorter than `levels` and indexes differently. Without `phases`, `contact_time` and
+    # `coefficient_of_restitution` are unreachable from a real run -- which they were.
+    phases = Phase[FreeFlight]
     dt = dt_init
     phase = FreeFlight
     theta_c_prev = 0.0
@@ -280,6 +285,7 @@ function run_simulation(p::Params; t_end::Float64, dt_init::Float64=1e-3,
                 trial = free_flight_step(hist, dt, p)
                 hist.prev = hist.curr; hist.curr = trial
                 push!(levels, trial)
+                push!(phases, FreeFlight)
                 dt = min(dt * 1.2, dt_max)
             else
                 # Contact begins. Bisect on dt so the first contact step starts as close
@@ -336,6 +342,7 @@ function run_simulation(p::Params; t_end::Float64, dt_init::Float64=1e-3,
         end
         hist.prev = hist.curr; hist.curr = level
         push!(levels, level)
+        push!(phases, InContact)
         push!(diag, merge(info, (; t=level.t, dt=dt, z=level.com.z, v=level.com.v)))
         theta_c_prev = info.theta_c
         chat_guess = level.X[1:p.N+1]
@@ -344,5 +351,7 @@ function run_simulation(p::Params; t_end::Float64, dt_init::Float64=1e-3,
                            "v=$(round(level.com.v,digits=4))")
         dt = min(dt * 1.5, dt_max)
     end
-    return levels, diag
+    # `phases` is returned last so that existing `levels, diag = run_simulation(...)` call
+    # sites keep working: Julia's destructuring permits fewer targets than tuple elements.
+    return levels, diag, phases
 end

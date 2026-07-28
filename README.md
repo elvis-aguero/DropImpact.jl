@@ -32,6 +32,8 @@ search rather than an unknown in a joint algebraic system.
 | Path | Contents |
 |---|---|
 | `julia/` | The `SpectralKM` package: model, time stepper, validation and rendering scripts. |
+| `julia/notebooks/tutorial.ipynb` | Guided tour: run an impact, read the diagnostics, compare wall conditions. Dependency-free (SVG figures). |
+| `julia/scripts/sweep.jl` | Parallel parameter sweep; picks its own worker count by measuring, and is resumable. |
 | `docs/next-gen-KM-model.tex` | The model derivation — the physics ground truth for `julia/`. Includes a section recording arguments from earlier revisions that were wrong, and why. |
 | `docs/BouncingDroplets.tex`, `docs/Deformable_impactors.tex` | The two parent papers, for reference and for the claims the derivation makes about them. |
 | `derivations/` | CAS and numerical audit scripts backing specific claims in the `.tex`. Every measurement the document quotes is produced by one of them. |
@@ -54,8 +56,12 @@ p = Params(We = 1.0958, Bo = 0.017, Oh = 0.006,   # water, R = 0.35 mm
            M = 60, L = 60, N = 3,                  # bath / droplet / pressure modes
            b = 6.0, h0 = 3.0, nq = 40)             # bath radius, depth, quadrature order
 
-levels, diag = run_simulation(p; t_end = 8.0, dt_init = 1e-3)
+levels, diag, phases = run_simulation(p; t_end = 8.0, dt_init = 1e-3)
 ```
+
+New here? Start with **`julia/notebooks/tutorial.ipynb`** — a guided tour of the model,
+the diagnostics, the contact-time trap below, and the wall conditions. It has no
+plotting dependency either: figures are emitted as SVG.
 
 `levels` is the trajectory: one `Level` per accepted step, holding the bath modes
 `a_m`, droplet modes `β_l`, centre-of-mass height and velocity, and the solved
@@ -70,28 +76,45 @@ settles long before anything else does. At `We = 1.0958`:
 
 | `(M,L,N,nq)` | wall (s) | contact time | CoR | max width |
 |---|---|---|---|---|
-| `(30,30,3,30)` | 68 | 2.152 | 0.5399 | 1.795 |
-| `(60,60,3,40)` | 24 | 4.2624 | 0.2996 | 1.1225 |
-| `(60,60,6,60)` | 52 | 4.2624 | 0.2996 | 1.1225 |
-| `(120,120,6,60)` | 99 | 4.2646 | 0.2995 | 1.1225 |
-| `(120,120,10,80)` | 177 | 4.2646 | 0.2996 | 1.1225 |
+| `(30,30,3,30)` | 11 | 3.6093 | 0.2997 | 1.1225 |
+| `(60,60,3,40)` | 25 | 3.6293 | 0.2996 | 1.1225 |
+| `(120,120,6,60)` | 96 | 3.6293 | 0.2995 | 1.1225 |
 
-`M = L = 30` is badly unconverged — a contact time half the correct value, and a
-width and CoR that are not physical. From `M = L = 60` contact time is settled to
-five digits and doubling the mode counts moves it by 0.05 %.
+Convergence is quick: `M = L = 30` is already within 0.55 % of the settled contact
+time, and going from `M = L = 60` to `120` moves it not at all — identical to five
+digits — while costing four times the wall clock. CoR and maximum width are flat
+across the whole range. `M = L = 60` is the recommendation because it is settled
+rather than nearly so, not because coarser is unusable.
 
-**`N` does not converge the pressure.** Sweeping `N` along a real trajectory at
-`M = L = 60`:
+(An earlier revision of this table reported `M = L = 30` as badly unconverged, with a
+contact time of 2.152 and an unphysical width of 1.795. That was the span metric
+below, not the physics: at the corrected metric the coarse case is fine. Wall times
+here were measured with three cases running concurrently, so they are indicative.)
 
-| `N` | contact time | CoR | max `r_c` | `‖Δp‖/‖p‖` vs `N=16` | `Δf/f` vs `N=16` |
-|---|---|---|---|---|---|
-| 2 | 4.26239 | 0.29959 | 0.8192 | — | — |
-| 3 | 4.26239 | 0.29959 | 0.8183 | 0.46 – 0.96 | 1e-5 – 1e-2 |
-| 6 | 4.26239 | 0.29960 | 0.8124 | | |
-| 10 | 4.26239 | 0.29962 | 0.8062 | | |
-| 16 | 4.26239 | 0.29962 | 0.7999 | | |
+> **Which contact time?** A single impact does not produce a single contact interval:
+> the stepper detaches and immediately re-attaches a few times, separated by gaps of
+> exactly one `dt_init`, which is the signature of the guard that forces one advancing
+> free-flight step after contact ends. Three scalars therefore compete, and at the
+> reference case they spread 17 %: the first interval (3.629), the sum over intervals
+> (3.815), and the first-to-last span (4.263). **`primary_contact_time` — the first
+> interval — is the metric**; it is the only one measuring a single physical event, and
+> the only one monotone in `We`. Earlier revisions of this README reported the span, which
+> is why several numbers here changed. `contact_intervals` exposes the full structure.
+>
+> `primary_contact_time` takes the **longest** interval, not the first. They coincide
+> whenever a run is clean, but an under-resolved case chatters from onset — at
+> `M = L = 20`, `nq = 16` the first interval is 0.008 long against a physical 3.56 — so
+> taking the first would report a contact time three orders of magnitude too small. That
+> also makes the metric self-checking: if `contact_intervals` shows the longest interval
+> is not the first, the truncation is too coarse to trust.
 
-Contact time is identical to six significant figures across the range, while the
+**`N` does not converge the pressure.** Sweeping `N ∈ {2,3,6,10,16}` along a real
+trajectory at `M = L = 60`, contact time is **identical to six significant figures
+at every `N`**, and CoR moves only in its fifth digit (0.29959 → 0.29962). The one
+quantity that drifts is the maximum contact radius, from 0.8192 at `N = 2` to
+0.7999 at `N = 16` — 2.4 %, and in the direction *away* from DNS.
+
+Contact time is thus flat across the range, while the
 solved pressure *profile* at `N = 3` differs from `N = 16` by 46–96 % in relative
 L2 over the patch. Both are consistent: the compliance operator is compact, so
 pressure modes beyond a few sit in its numerical nullspace, and the pressure
@@ -100,10 +123,7 @@ between `1e-5` and `1e-2`. Refining `N` buys a different-looking pressure profil
 and the same physics.
 
 Use `M = L = 60`, `N = 3`, `nq = 40` for trajectories, and do not quote the
-pointwise pressure as a converged output at any `N`. The one observable that
-drifts with `N` is the maximum contact radius — 0.8192 down to 0.7999,
-monotonically — which is the quantity most sensitive to the pressure profile and
-the one carrying the open discrepancy below.
+pointwise pressure as a converged output at any `N`.
 
 ### Wall condition
 
@@ -119,26 +139,40 @@ container wall `r = b`.
 
 `:free` is the configuration of both parent papers. `:pinned` implements route (A)
 of `derivations/feasibility_pinned_contact_line.jl`: the surface is pinned exactly
-and by construction — measured `η(b) = 1.1e-15` sustained over a full impact — and
-the wall slope is free, as a real pinned meniscus requires. There is no `k_0 = 0`
-piston mode, which is the physically right exclusion: a pinned surface cannot
+and by construction — `η(b)` sits at roundoff for a whole impact, because pinning is
+an identity of the basis rather than a constraint being enforced. There is no
+`k_0 = 0` piston mode, correctly: a surface pinned on its whole boundary cannot
 translate uniformly.
 
-**`:pinned` violates no-flux at the wall, by construction and at leading order.**
-The velocity potential shares the horizontal basis (`∂η/∂τ = ∂φ/∂z` couples them)
-and `∂φ/∂r` at the wall goes like `J_1(k_m b)`, which for this eigenvalue set is
-O(1) — 0.52, 0.34, 0.27, 0.23 for the first four modes — not small. The wall leaks.
-This is the price of the route: pinning exact, no-flux broken. The alternative
-(keep the `:free` basis, impose pinning with a Lagrange multiplier) honours
-no-flux exactly but cannot represent a nonzero wall slope, converging at only
-`O(1/M)` there. Both costs are quantified in the feasibility script.
+> ⚠️ **`:pinned` does not conserve bath volume. Treat it as a diagnostic, not physics.**
+> A mode displaces volume `(b/k_m) J_1(k_m b)`. Under `:free` that is *zero* for every
+> non-piston mode by definition of the eigenvalues, and the one volume-carrying mode
+> (the piston) has `κ_0 = 0` and can never be driven — so volume conservation is
+> structural, measured at `5e-15`. Under `:pinned` every mode carries volume and
+> nothing constrains the sum: `|∫η r dr|` reaches **2.79, i.e. 17.5 R³ created from
+> nothing, four times the droplet's own volume**. `:pinned` also breaks no-flux at
+> leading order, and none of the closure diagnostics (self-adjointness, conditioning,
+> the tangency root) have been re-measured under it.
+>
+> The consistent route keeps the `:free` basis and imposes pinning with a multiplier —
+> the rim line force — which conserves volume exactly since `κ_0 = 0`. **That is the
+> recommended formulation and it is not yet implemented.**
+
+There is also a continuum result worth knowing before choosing either: with no-flux
+walls in a rigid container, `∂_τ[∂_rη(b)] = O(Oh)`, so **the wall slope is frozen**.
+"Pinned with a freely time-varying wall slope" is over-determined, for any basis. The
+admissible pinned configuration is the clamped edge, and a constant nonzero wall slope
+is obtained by adding a static meniscus. An earlier revision of this README argued the
+multiplier route "cannot represent a nonzero wall slope, converging at only `O(1/M)`";
+that came from a diagnostic measuring its own grid spacing — computed analytically the
+convergence is `M^(-3/2)` and the slope is recovered at every `r < b`.
 
 ## Validation
 
 ```bash
 cd julia
 julia --project=. scripts/validate_trajectory.jl   # vs experiment + DNS
-julia --project=. scripts/validate_sweep.jl        # rebound metrics vs We
+julia --project=. scripts/validate_experimental.jl  # vs measured trajectories + error bars
 ```
 
 Validation is against **measurement**, not against another model. The reference
@@ -176,16 +210,46 @@ the way through contact here, 0.26 for 1PKM, 0.33 for DNS: same direction, more
 skewed. With no measured contact radius available there is nothing to adjudicate
 between a closure defect and a definition mismatch, so this stays open.
 
+### Sweeps
+
+```bash
+cd julia
+julia --project=. -t auto scripts/sweep.jl --wall=free 0.2 0.4 1.0958 3.0
+```
+
+Cases run concurrently at a worker count the script **measures** rather than assumes:
+
+1. **Calibrate.** Time one cheap proxy case and record its peak-RSS growth. A single
+   impact's marginal footprint is only about 12 MiB — the ~450 MiB the process holds is
+   the Julia runtime plus the package, paid once — because `case_metrics` reduces each
+   run to scalars and drops `levels`/`diag` before returning. Keeping full histories is
+   what would make a long sweep grow; refusing to is what keeps it flat.
+2. **Cap by memory.** Budget against `Sys.total_memory()`, deliberately *not*
+   `Sys.free_memory()`: on macOS the latter counts only genuinely free pages and reads
+   as ~0 GiB on a warm machine, which would silently cap every sweep at one worker. With
+   a 12 MiB footprint the cap is in the hundreds, so it only binds at large `M`, `L`, `nq`.
+3. **Ablate.** Time `W = 1, 2, 4, …` (running `2W` cases each, so every worker gets at
+   least two) and take the knee — the last `W` that improved throughput by >15 %.
+
+Measured on 8 cores: 0.82 → 1.63 → 2.76 → 2.92 cases/s at `W = 1, 2, 4, 8`. Scaling is
+linear to `W = 2`, sublinear by 4, and **flat from 4 to 8** — doubling the workers buys
+6 %, because these runs are allocation-heavy and contend on memory bandwidth and the GC.
+So the knee lands at `W = 4`, and `Sys.CPU_THREADS` would have been the wrong answer.
+
+Results append to a CSV; re-running skips Weber numbers already present, so an
+interrupted sweep resumes. `--workers=N` overrides the selection, `--no-ablation` keeps
+the memory cap only. A case that throws is recorded as failed without abandoning the rest.
+
 ### Performance
 
 A typical impact runs in about 25 s at production settings, roughly flat in `We`:
 
 | `We` | wall (s) | steps | ms/step | contact time | CoR |
 |---|---|---|---|---|---|
-| 0.0646 | 32 | 519 | 61 | 4.768 | 0.5173 |
-| 0.3000 | 24 | 545 | 44 | 4.388 | 0.4023 |
-| 1.0958 | 23 | 543 | 42 | 4.262 | 0.2996 |
-| 3.0000 | 24 | 546 | 44 | 4.186 | 0.2331 |
+| 0.0646 | 32 | 519 | 61 | 4.769 | 0.5173 |
+| 0.3000 | 24 | 545 | 44 | 3.869 | 0.4023 |
+| 1.0958 | 23 | 543 | 42 | 3.629 | 0.2996 |
+| 3.0000 | 24 | 546 | 44 | 3.529 | 0.2331 |
 
 Loss of contact is detected from the contact patch collapsing (`θ_c` reaching its
 search floor), with a sustained non-positive net force as a secondary test. The
@@ -227,6 +291,7 @@ affine reduction, the inner Galerkin residual, and the contact-step machinery.
 | `audit_compliance_operator.jl` | Self-adjointness, definiteness, `δ`-scaling and resolvable rank of the pressure→gap compliance operator. |
 | `audit_nested_closure.jl` | The inner system's conditioning is flat in `δ` and of order unity, against `~1e18` for the joint system it replaces. |
 | `audit_weak_determinacy.jl` | Which functionals converge in `N` and which do not, and the identifiability of the self-adjointness diagnosis. |
+| `feasibility_pinned_contact_line.jl` | The pinned-wall study: why the no-flux basis converges to a pinned profile after all (`M^(-3/2)`, analytically), why the Dirichlet basis loses volume conservation, and the retracted grid artifact that argued otherwise. |
 | `probe_global_basis_argmin.jl` | Records a formulation that **fails**: a global pressure basis with weakly-imposed zero pressure off the patch, selected by minimising an integrated residual. |
 
 Scripts marked `SUPERSEDED` in their header verify claims that have since been

@@ -9,9 +9,10 @@
 # used 2/(b J_1(k_m))², reproduced verbatim from AlventosaEtAl2023 eq. (300); that is
 # the DIRICHLET normalizer, evaluated at k_m rather than k_m b, and is inconsistent
 # with the no-flux basis both that paper and this one impose. The error is
-# mode-dependent and locally severe (ratio to the correct weight runs 0.57, 2.67,
-# 5.35, 6.41, 4.74, 1.68, 0.0086, 1.28 for m=1..8 at b=6, the near-zero at m=7 because
-# k_7 falls close to the first zero of J_1).
+# mode-dependent and locally severe: at b=6 the ratio of their weight to the correct
+# one ranges over 0.16 to 1.8 for m=1..8 but reaches 116 at m=7, where k_7=3.7933 falls
+# close to the first zero of J_1 at 3.8317, so J_1(k_m) → 0 and their weight diverges.
+# (An earlier version of this comment printed that list inverted.)
 #
 # The m=0 "piston" mode (k_0=0) needs no special case under the correct normalization:
 # J_0(0)=1, so its weight is the finite 2/b², matching ∫_0^b 1·r dr = b²/2. Its affine

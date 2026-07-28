@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, 'dev-**']
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, 'dev-**']
 
 jobs:
   julia-tests:
@@ -40,3 +40,11 @@ jobs:
         run: julia --project=derivations -e 'using Pkg; Pkg.instantiate()'
       - name: Run verify_accel_closure.jl
         run: julia --project=derivations derivations/verify_accel_closure.jl
+      # The pressure-basis derivation is the one the contact closure rests on: it proves the
+      # degree identity and the projection degrees exactly, in Rational{BigInt}. It runs in
+      # seconds, so there is no reason for it not to gate every push.
+      - name: Run verify_legendre_pressure_basis.jl
+        run: julia --project=derivations derivations/verify_legendre_pressure_basis.jl
+      # Backs every number quoted in the design doc's wall-condition subsection.
+      - name: Run feasibility_pinned_contact_line.jl
+        run: julia --project=julia derivations/feasibility_pinned_contact_line.jl

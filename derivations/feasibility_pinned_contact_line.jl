@@ -7,35 +7,52 @@
 # WALL SLOPE FREE -- a generic pinned meniscus meets the wall at whatever angle the
 # dynamics dictate.
 #
-# That is a genuine conflict, and the two obvious routes each break something:
+# FIRST, the continuum fact that frames everything below, because it is easy to miss and it
+# settles the question. Exact no-flux on a vertical wall means d(phi)/dr(b,z) = 0 for ALL z;
+# differentiating in z gives d/dr d(phi)/dz (b,0) = 0, and the kinematic condition then gives
+#
+#       d/dtau [ d(eta)/dr (b) ] = 2 Oh d/dr grad^2 eta (b) = O(Oh).
+#
+# In a rigid right-cylindrical container the wall slope is FROZEN, to O(Oh), whatever basis
+# is used. So "pinned at the rim with a freely time-varying wall slope" is not a solution of
+# the governing equations under no-flux walls -- it is over-determined. The admissible pinned
+# configuration is the CLAMPED EDGE: eta(b) = 0 with d(eta)/dr(b) frozen. A constant nonzero
+# wall slope is then had by splitting eta = eta_s(r) + sum a_m(tau) J_0(k_m r) with eta_s a
+# static meniscus, at which point pinning, no-flux and a nonzero wall slope are all exact.
+#
+# The two discrete routes:
 #
 #   (A) DIRICHLET basis, k_m b = zeros of J_0. Then eta(b) = 0 identically, mode by mode,
-#       and the wall slope is free -- exactly right for pinning. But the velocity potential
-#       shares this horizontal basis (they are coupled by d(eta)/dt = d(phi)/dz at z = 0),
-#       and d(phi)/dr at r = b goes like J_1(k_m b), which is NOT zero for this set. The
-#       wall leaks: no-flux is violated.
+#       and the wall slope is free. But the velocity potential shares this horizontal basis
+#       (coupled by d(eta)/dt = d(phi)/dz at z = 0), and d(phi)/dr at r = b goes like
+#       J_1(k_m b) != 0. The wall leaks -- and, far worse, BATH VOLUME IS NOT CONSERVED
+#       (section 3b): measured, route (A) creates four times the droplet's own volume.
 #
 #       Aside worth recording: the Fourier-Bessel weight for THIS basis is
-#       2/(b J_1(k_m b))^2 -- precisely the expression AlventosaEtAl2023 print and which
-#       this project corrected to 2/(b J_0(k_m b))^2 for the no-flux basis. Their formula
-#       is the right one for a pinned bath, applied to a free one.
+#       2/(b J_1(k_m b))^2, which is the Dirichlet normalizer whose FORM AlventosaEtAl2023
+#       print -- though not their exact expression, since they evaluate J_1 at k_m rather
+#       than k_m b, an independent second error. It is the right normalizer for a pinned
+#       bath applied to a free one. Note the configurations also differ in the eigenvalues
+#       themselves and in the presence of the k = 0 piston mode, so the weight substitution
+#       is not the whole of the difference.
 #
-#   (B) NEUMANN basis (no-flux honoured exactly) with eta(b) = 0 imposed as a single
-#       scalar constraint carried by a Lagrange multiplier -- physically the line force
-#       the pinning exerts on the contact line. The flow boundary condition is then exact
-#       and the pinning is exact, but every basis function still has zero wall slope, so
-#       the representable surfaces all have d(eta)/dr(b) = 0. A pinned meniscus with a
-#       nonzero wall slope can only be approached, never represented.
+#   (B) NEUMANN basis (no-flux and volume conservation both exact) with eta(b) = 0 imposed
+#       as a single scalar constraint carried by a multiplier -- physically the line force
+#       the rim exerts on the contact line, a quantity of interest in its own right. Every
+#       basis function has zero wall slope, so the truncated sum does too AT r = b exactly;
+#       but section (1) shows this failure is confined to that single point, with the slope
+#       recovered at every r < b and L2 convergence at M^(-3/2).
 #
-# Route (B) is the physically consistent one -- pinning IS a constraint force, and it
-# leaves the flow boundary condition intact -- so the question that decides feasibility is
-# quantitative: HOW BADLY does the Neumann set converge to a profile with a nonzero wall
-# slope? That is what this script measures.
+# CONCLUSION: route (B). An earlier revision of this script concluded the opposite, on the
+# strength of a wall-slope diagnostic that was measuring its own grid spacing; section (1b)
+# reproduces that artifact deliberately so the mistake stays visible. Route (A) is what the
+# package currently implements as the non-default `wall=:pinned`, and it should be read as a
+# diagnostic rather than a physical model.
 #
-# It also checks the two structural questions route (B) raises: whether eliminating the
-# multiplier keeps the bath response AFFINE in the pressure (so the nested closure of
-# docs/next-gen-KM-model.tex survives untouched), and whether that elimination is
-# well conditioned.
+# This script checks: (1) how well the Neumann set represents a pinned profile, analytically;
+# (1b) the retracted artifact; (3) route (A)'s wall leak and (3b) its
+# volume violation; (4) whether eliminating route (B)'s multiplier keeps the bath response
+# AFFINE in the pressure, so that the nested closure of docs/next-gen-KM-model.tex survives.
 using SpectralKM
 using SpectralKM: bessel_zeros_J1
 using SpecialFunctions
@@ -60,72 +77,79 @@ end
 println("="^78)
 println("(1) Can the NEUMANN set represent a pinned surface? (route B's central risk)")
 println("="^78)
-println("Target: a profile that is pinned at the wall with a NONZERO slope there --")
+println("Target: a profile pinned at the wall with a NONZERO slope there --")
 println("eta(r) = J_0(j01 r/b), which has eta(b) = 0 and d(eta)/dr(b) != 0.")
-println("Expanded on the no-flux set {J_0(k_m r) : J_1(k_m b) = 0}, whose every member has")
-println("zero wall slope. Errors are relative L2 over the bath, and pointwise near r = b.\n")
+println("Expanded on the no-flux set {J_0(k_m r) : J_1(k_m b) = 0}, every member of which has")
+println("zero wall slope.")
+println()
+println("EVERYTHING HERE IS ANALYTIC. An earlier version of this script fitted on a fixed")
+println("4000-point grid and finite-differenced the last interval to get a 'wall slope'. That")
+println("interval lies INSIDE a boundary layer of width ~ b/k_M, so the number returned was")
+println("proportional to dr*k_M -- a property of the grid, not of the expansion. Refining the")
+println("grid at fixed M = 640 drove it from -0.033 to -0.0005, toward zero, while the true")
+println("slope is -0.2081. It doubled whenever M doubled, which looked like slow convergence")
+println("and was really just dr*k_M. Section (1b) below reproduces the artifact deliberately.")
+println()
+println("The projection is available in closed form. With alpha = j01/b and J_1(k_m b) = 0,")
+println("  int_0^b J_0(alpha r) J_0(k_m r) r dr = b*alpha*J_1(alpha b)*J_0(k_m b)/(alpha^2-k_m^2)")
+println("(the other term carries J_0(alpha b) = J_0(j01) = 0), and ||J_0(k_m .)||^2 =")
+println("(b^2/2) J_0(k_m b)^2, so a_m = 2 alpha J_1(alpha b) / (b (alpha^2-k_m^2) J_0(k_m b)).")
+println("For the piston mode k_0 = 0: a_0 = 2 J_1(alpha b)/(alpha b).\n")
 
-let j01 = bessel_zeros_J0(1)[1]
-    target(r) = besselj0(j01 * r / B)
-    nq = 4000
-    r = range(1e-9, B; length=nq)
-    dr = step(r)
-    w = r .* dr                                     # cylindrical measure r dr
-    tg = target.(r)
-    nrm = sqrt(sum(w .* tg .^ 2))
-    @printf("  %-6s %-13s %-13s %-13s %-13s\n", "M", "rel L2", "|err| at 0.99b", "|err| at b", "slope at b")
-    for M in (10, 20, 40, 80, 160, 320, 640)
-        k = bessel_zeros_J1(M) ./ B                 # includes k_0 = 0 (the piston mode)
-        # least-squares fit in the r dr measure = plain projection, the basis is orthogonal
-        coef = zeros(length(k))
-        for (i, km) in enumerate(k)
-            ϕ = besselj0.(km .* r)
-            nn = sum(w .* ϕ .^ 2)
-            nn <= 0 && continue
-            coef[i] = sum(w .* ϕ .* tg) / nn
-        end
-        fit = zeros(nq)
-        for (i, km) in enumerate(k)
-            fit .+= coef[i] .* besselj0.(km .* r)
-        end
-        relL2 = sqrt(sum(w .* (fit .- tg) .^ 2)) / nrm
-        i99 = searchsortedfirst(collect(r), 0.99B)
-        slope = (fit[end] - fit[end-1]) / dr
-        @printf("  %-6d %-13.3e %-13.3e %-13.3e %-13.3e\n",
-                M, relL2, abs(fit[i99] - tg[i99]), abs(fit[end] - tg[end]), slope)
+"""Exact Fourier-Bessel coefficients of J_0(alpha r) on the no-flux set, plus the modal norms."""
+function neumann_coeffs(alpha, k, b)
+    a = similar(k)
+    for (i, km) in enumerate(k)
+        a[i] = km == 0 ? 2 * besselj1(alpha * b) / (alpha * b) :
+               2 * alpha * besselj1(alpha * b) / (b * (alpha^2 - km^2) * besselj0(km * b))
     end
-    @printf("\n  exact wall slope of the target: %.4f\n", -j01 / B * besselj1(j01))
-    println("  The slope column is a finite difference taken just INSIDE the wall, not at it.")
-    println("  AT r = b every basis function has zero derivative, so the truncated sum does")
-    println("  too, exactly. Just inside, the fit develops a boundary layer that thins as M")
-    println("  grows -- which is why the measured slope climbs (5.7e-4 -> 3.3e-2) while still")
-    println("  falling six-fold short of the true -0.2081 at M = 640. That is the signature")
-    println("  of the Gibbs-type mismatch, and it is the quantity a contact-line force would")
-    println("  depend on.")
+    return a
+end
+
+let j01 = bessel_zeros_J0(1)[1], alpha = bessel_zeros_J0(1)[1] / B
+    dtarget(r) = -alpha * besselj1(alpha * r)               # exact slope of the target
+    # ||target||^2 = (b^2/2)[J_0(alpha b)^2 + J_1(alpha b)^2] = (b^2/2) J_1(j01)^2
+    nrm2 = B^2 / 2 * besselj1(j01)^2
+    @printf("  %-7s %-13s %-11s %-11s %-11s %-11s\n",
+            "M", "rel L2 (exact)", "s(0.9b)", "s(0.99b)", "s(0.999b)", "s(b)")
+    for M in (10, 40, 160, 640, 2560)
+        k = bessel_zeros_J1(M) ./ B
+        a = neumann_coeffs(alpha, k, B)
+        # Parseval: ||target - fit||^2 = ||target||^2 - sum a_m^2 ||phi_m||^2
+        fit2 = sum(a[i]^2 * (i == 1 && k[i] == 0 ? B^2 / 2 : B^2 / 2 * besselj0(k[i] * B)^2)
+                   for i in eachindex(k))
+        relL2 = sqrt(max(nrm2 - fit2, 0.0)) / sqrt(nrm2)
+        # analytic derivative of the truncated series: d/dr sum a_m J_0(k_m r)
+        slope(r) = -sum(a[i] * k[i] * besselj1(k[i] * r) for i in eachindex(k))
+        @printf("  %-7d %-13.3e %-11.4f %-11.4f %-11.4f %-11.4f\n",
+                M, relL2, slope(0.9B), slope(0.99B), slope(0.999B), slope(B))
+    end
+    @printf("\n  target slope:                       %-11.4f %-11.4f %-11.4f %-11.4f\n",
+            dtarget(0.9B), dtarget(0.99B), dtarget(0.999B), dtarget(B))
+    println("  The relative L2 error falls as M^(-3/2): clean algebraic convergence, no floor.")
+    println("  The slope is recovered at every r < b as M grows. At r = b EXACTLY it is 0 for")
+    println("  every truncation, since every basis function has zero derivative there -- so the")
+    println("  failure is confined to a single point, a set of measure zero, with a boundary")
+    println("  layer of width ~ b/k_M around it. That is a far weaker defect than route A's")
+    println("  loss of volume conservation (section 3).")
 end
 
 println()
 println("="^78)
-println("(2) For contrast: the same fit for a target the Neumann set CAN represent")
+println("(1b) The artifact, reproduced on purpose: finite-differencing the last interval")
 println("="^78)
-let
-    k = bessel_zeros_J1(60) ./ B
-    target(r) = besselj0(k[4] * r) + 0.5 * besselj0(k[7] * r)     # zero wall slope
-    nq = 4000
-    r = range(1e-9, B; length=nq); dr = step(r); w = r .* dr
-    tg = target.(r); nrm = sqrt(sum(w .* tg .^ 2))
-    @printf("  %-6s %-13s\n", "M", "rel L2")
-    for M in (10, 20, 40)
-        kk = bessel_zeros_J1(M) ./ B
-        fit = zeros(nq)
-        for km in kk
-            ϕ = besselj0.(km .* r); nn = sum(w .* ϕ .^ 2)
-            nn <= 0 && continue
-            fit .+= (sum(w .* ϕ .* tg) / nn) .* ϕ
-        end
-        @printf("  %-6d %-13.3e\n", M, sqrt(sum(w .* (fit .- tg) .^ 2)) / nrm)
+println("M is FIXED at 640. Only the grid changes. A genuine representation error cannot")
+println("depend on the grid used to look at it.")
+let alpha = bessel_zeros_J0(1)[1] / B
+    k = bessel_zeros_J1(640) ./ B
+    a = neumann_coeffs(alpha, k, B)
+    @printf("  %-10s %-12s %-14s\n", "nq", "dr", "FD 'wall slope'")
+    for nq in (4000, 16000, 64000, 256000)
+        r = range(1e-9, B; length=nq); dr = step(r)
+        f(x) = sum(a[i] * besselj0(k[i] * x) for i in eachindex(k))
+        @printf("  %-10d %-12.2e %-14.5f\n", nq, dr, (f(B) - f(B - dr)) / dr)
     end
-    println("  Spectral (machine-precision once the modes are included), as expected.")
+    println("  -> 0 under refinement. The quantity measured was dr*k_M.")
 end
 
 println()
@@ -140,38 +164,74 @@ let
     for (m, z) in enumerate(z0)
         @printf("  %-4d %-12.5f %-14.2e %-14.4f\n", m, z, besselj0(z), besselj1(z))
     end
-    println("  J_0 vanishes (pinning exact) while J_1 is O(1): the wall-normal velocity is")
-    println("  NOT small, so no-flux fails at leading order rather than marginally.")
+    println("  J_0 vanishes (pinning exact) while J_1 does not, decaying only as m^(-1/2)")
+    println("  (|J_1(j0m)| -> sqrt(2/(pi j0m))): the wall-normal velocity is not small.")
+end
+
+println()
+println("="^78)
+println("(3b) Route (A)'s REAL cost: bath volume is not conserved")
+println("="^78)
+println("This, not the wall velocity, is what disqualifies route (A) as physics. The")
+println("volume a mode displaces is int_0^b J_0(k_m r) r dr = (b/k_m) J_1(k_m b).")
+println()
+println("For the NEUMANN set J_1(k_m b) = 0 by definition, so every non-piston mode is")
+println("volume-NEUTRAL, and the only volume-carrying mode is the piston, whose pressure")
+println("response kappa_0 is identically zero -- it can never be driven. Volume conservation")
+println("is therefore structural, not a matter of accuracy.")
+println()
+println("For the DIRICHLET set J_1(k_m b) != 0, so EVERY mode carries volume and nothing")
+println("constrains the sum.")
+let
+    @printf("  %-6s %-16s %-16s\n", "m", "Neumann (b/k)J_1", "Dirichlet (b/k)J_1")
+    kn = bessel_zeros_J1(5) ./ B
+    kd = bessel_zeros_J0(5) ./ B
+    for m in 1:5
+        @printf("  %-6d %-16.2e %-16.4f\n", m,
+                (B / kn[m+1]) * besselj1(kn[m+1] * B), (B / kd[m]) * besselj1(kd[m] * B))
+    end
+    println("  Neumann: zero to roundoff, mode by mode. Dirichlet: O(1), alternating in sign.")
+    println()
+    println("  Measured over the reference impact (We=1.0958, M=L=60, N=3), the worst")
+    println("  |int_0^b eta r dr| over the run is 4.8e-15 for :free and 2.788 for :pinned.")
+    println("  Times 2*pi that is 17.5 R^3 of bath volume created from nothing, against a")
+    println("  droplet volume of 4*pi/3 = 4.19 R^3 -- a factor of four. Reproduce with")
+    println("  julia --project=julia scripts/run_impact.jl 1.0958 0.017 0.006 60 60 3 14 pinned")
 end
 
 println()
 println("="^78)
 println("(4) Route (B) structure: does eliminating the multiplier keep the bath AFFINE?")
 println("="^78)
-println("Constraint  C(a) = sum_m a_m J_0(k_m b) = 0.  By virtual work the multiplier's")
-println("generalized force on mode m is Lambda * dC/da_m = Lambda * J_0(k_m b), so the BDF2")
-println("affine relation gains one term,")
-println("      a_m = alpha_m + kappa_m c_m + kappa_m J_0(k_m b) Lambda / F_m,")
-println("and the constraint determines Lambda linearly. Substituting back leaves a_m affine")
-println("in c with a RANK-ONE correction to the bath compliance -- so the inner Galerkin")
-println("system stays square, linear in the same unknowns, and the nested closure is")
-println("untouched. What must be checked is that the denominator does not vanish.\n")
+println("Constraint  C(a) = sum_m a_m J_0(k_m b) = 0, enforced by a multiplier Lambda.")
+println()
+println("An earlier version of this script inserted Lambda as a 'generalized force'")
+println("Lambda*dC/da_m = Lambda*J_0(k_m b) divided by F_m. That was wrong: it omits the modal")
+println("norm that eq:c_m-def carries, and its m=0 term is literally 0/0 since kappa_0 = F_0 = 0")
+println("(the loop silently started at m=1, so the printed sum was not the sum the formula")
+println("defined). Treat Lambda as the physical object instead -- a line force at the rim,")
+println("p_Lambda = Lambda*delta(r-b). Its Fourier-Bessel coefficient under eq:c_m-def is")
+println("      c_m^Lambda = [2/(b J_0(k_m b))^2] * Lambda * b * J_0(k_m b) = 2 Lambda/(b J_0(k_m b)),")
+println("so the affine relation and the constraint close on")
+println("      a_m = alpha_m + kappa_m c_m + (2/b) kappa_m Lambda / J_0(k_m b),")
+println("      D   = (2/b) sum_m kappa_m,")
+println("in which the J_0(k_m b) factors CANCEL. Substituting back leaves a_m affine in c with")
+println("a rank-one correction, so the nested closure is untouched.\n")
 let delta = 1e-3, a = 1.5, h0 = 3.0, Oh = 0.006, Bo = 0.017
-    @printf("  %-6s %-16s %-16s %-12s\n", "M", "denominator D", "|D| / max term", "cond proxy")
-    for M in (20, 60, 120, 300)
+    kappa_of(km) = (-2 * delta^2 * km * tanh(km * h0)) /
+                   (a * (a + 4 * delta * Oh * km^2) + delta^2 * (km^2 + Bo) * km * tanh(km * h0))
+    @printf("  %-8s %-18s %-14s %-14s\n", "M", "D = (2/b)sum kappa", "all kappa<0?", "kappa_M")
+    for M in (20, 60, 120, 300, 1200, 4800)
         k = bessel_zeros_J1(M) ./ B
-        terms = Float64[]
-        for m in 1:M                      # skip the k=0 piston mode: kappa_0 = 0
-            km = k[m+1]
-            kap = (-2 * delta^2 * km * tanh(km * h0)) /
-                  (a * (a + 4 * delta * Oh * km^2) + delta^2 * (km^2 + Bo) * km * tanh(km * h0))
-            F = -2 * km * tanh(km * h0)
-            push!(terms, besselj0(km * B)^2 * kap / F)
-        end
-        D = sum(terms)
-        @printf("  %-6d %-16.6e %-16.3e %-12.3e\n", M, D, abs(D) / maximum(abs, terms),
-                maximum(abs, terms) / abs(D))
+        kaps = [kappa_of(k[m+1]) for m in 1:M]      # kappa_0 = 0 exactly, contributes nothing
+        @printf("  %-8d %-18.6e %-14s %-14.3e\n", M, (2 / B) * sum(kaps),
+                all(<(0), kaps), kaps[end])
     end
-    println("  D is a sum of same-sign terms (kappa/F > 0), so no cancellation: the")
-    println("  elimination is unconditionally well posed and costs one O(M) dot product.")
+    println("  Every term is negative, so no cancellation is possible and D != 0")
+    println("  unconditionally. The sum converges because kappa_m ~ -2/k_m^2, so D saturates")
+    println("  as M grows rather than diverging. Cost: one O(M) dot product.")
+    println()
+    println("  Note kappa_0 = 0 exactly: the rim line force cannot drive the piston mode, so")
+    println("  route (B) pins the surface WITHOUT moving volume. It does not reintroduce the")
+    println("  defect of section (3b) -- which is the decisive argument in its favour.")
 end

@@ -1,4 +1,6 @@
-# Validation sweep against the published reference curves (data/reference/*.csv):
+# COMPARISON sweep against the 1PKM reference curves -- NOT validation, since another
+# model's output is not evidence. Experimental validation is validate_experimental.jl.
+# Reference curves (data/reference/*.csv):
 # coefficient of restitution, contact time, and maximum deformation vs Weber number,
 # at the water parameters Bo=0.017, Oh=0.006 of AlventosaEtAl2023.
 using SpectralKM, Printf, DelimitedFiles
@@ -9,9 +11,9 @@ const OH = 0.006
 """Rebound metrics from one run: (CoR, contact time, max contact radius, max width)."""
 function metrics(We; M=60, L=60, N=3, nq=40, t_end=14.0)
     p = Params(We=We, Bo=BO, Oh=OH, M=M, L=L, N=N, b=6.0, h0=3.0, nq=nq)
-    levels, diag = run_simulation(p; t_end=t_end, dt_init=1e-3)
+    levels, diag, phases = run_simulation(p; t_end=t_end, dt_init=1e-3)
+    times = [lv.t for lv in levels]
     isempty(diag) && return (nothing, nothing, nothing, nothing)
-    t_in = minimum(d.t for d in diag); t_out = maximum(d.t for d in diag)
     iout = argmax([d.t for d in diag])
     cor = abs(diag[iout].v / -sqrt(We))
     rc = sin(maximum(d.theta_c for d in diag))
@@ -22,7 +24,9 @@ function metrics(We; M=60, L=60, N=3, nq=40, t_end=14.0)
             wmax = max(wmax, forward_map_r(lv.drop.beta, th, p.L))
         end
     end
-    return (cor, t_out - t_in, rc, wmax)
+    # primary_contact_time, NOT the first-to-last span: the span is inflated by
+    # detachment chatter and by free-flight excursions between re-contacts.
+    return (cor, primary_contact_time(times, phases), rc, wmax)
 end
 
 ref(f) = readdlm(joinpath(@__DIR__, "..", "data", "reference", f), ','; skipstart=1)

@@ -31,5 +31,6 @@ export newton_solve, NewtonResult, NewtonStatus, Converged, MaxIterExceeded, Sta
 export run_simulation, contact_step, inner_solve, onset_theta_c, free_flight_step
 export initial_level, gap_at_pole, select_theta_c, feasible_at, contact_quad
 export coefficient_of_restitution, contact_time, max_penetration_depth
+export contact_intervals, primary_contact_time
 
 end # module SpectralKM
