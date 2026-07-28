@@ -72,11 +72,12 @@ function step_affine(hist::SimHistory, dt::Float64, p::Params)
 end
 
 """
-    inner_solve(hist, dt, theta_c, chat_guess, p) -> (chat, result, am, beta, zcm, f)
+    inner_solve(hist, dt, theta_c, chat_guess, p) -> (chat, result, am, beta, zcm, f, cm, bl)
 
 Solve the square `N+1` Galerkin system (design doc eq:summary-galerkin) at FIXED
 `theta_c`. Returns the state the solved pressure induces, so the caller can evaluate the
-outer selector and the feasibility filters without recomputing anything.
+outer selector and the feasibility filters without recomputing anything. `cm`, `bl` are
+the raw pressure moments (see `unpack_state`), threaded through for convergence studies.
 """
 function inner_solve(hist::SimHistory, dt::Float64, theta_c::Float64,
     chat_guess::Vector{Float64}, p::Params)
@@ -85,8 +86,8 @@ function inner_solve(hist::SimHistory, dt::Float64, theta_c::Float64,
     q = contact_quad(xc, p)
     R = chat -> residual(chat, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p)
     result = newton_solve(R, chat_guess)
-    am, beta, zcm, f = unpack_state(result.X, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p)
-    return result.X, result, am, beta, zcm, f
+    am, beta, zcm, f, cm, bl = unpack_state(result.X, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p)
+    return result.X, result, am, beta, zcm, f, cm, bl
 end
 
 """
@@ -99,13 +100,13 @@ recompute it.
 """
 function feasible_at(hist::SimHistory, dt::Float64, theta_c::Float64,
     chat_guess::Vector{Float64}, p::Params; practical_resid_tol::Float64=1e-4)
-    chat, result, am, beta, zcm, f = inner_solve(hist, dt, theta_c, chat_guess, p)
+    chat, result, am, beta, zcm, f, cm, bl = inner_solve(hist, dt, theta_c, chat_guess, p)
     usable = result.status == Converged || result.resid_norm_hist[end] < practical_resid_tol
     usable || return false, nothing
     xc = cos(theta_c)
     check_monotone_r(beta, xc, p.L) || return false, nothing
     check_nonintersect(am, beta, zcm, theta_c, p) || return false, nothing
-    return true, (; chat, result, am, beta, zcm, f, theta_c)
+    return true, (; chat, result, am, beta, zcm, f, cm, bl, theta_c)
 end
 
 """
@@ -240,7 +241,7 @@ function contact_step(hist::SimHistory, dt::Float64, theta_c_prev::Float64,
                   COMState(best.zcm, v), hist.curr.t + dt, dt,
                   vcat(best.chat, best.theta_c))
     T = tangency_residual(best.am, best.beta, best.zcm, best.theta_c, p)
-    return level, (; nadmissible=1, theta_c=best.theta_c, T=T, f=best.f,
+    return level, (; nadmissible=1, theta_c=best.theta_c, T=T, f=best.f, cm=best.cm, bl=best.bl,
                    status=best.result.status, resid=best.result.resid_norm_hist[end])
 end
 

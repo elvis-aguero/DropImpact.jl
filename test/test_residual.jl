@@ -70,12 +70,14 @@
 
     @testset "zero pressure gives the free-flight state" begin
         p, _, xc, q, _, (kappa, alpha, lambda, gam, kappa_cm, mu) = setup(0.25)
-        am, beta, zcm, f = unpack_state(zeros(p.N + 1), xc, q, kappa, alpha,
+        am, beta, zcm, f, cm, bl = unpack_state(zeros(p.N + 1), xc, q, kappa, alpha,
                                         lambda, gam, kappa_cm, mu, p)
         @test f ≈ 0 atol = 1e-14                  # no pressure, no force
         @test am ≈ alpha atol = 1e-14             # bath advances on history alone
         @test beta ≈ gam atol = 1e-14
         @test zcm ≈ mu atol = 1e-14
+        @test all(abs.(cm) .< 1e-14)               # zero pressure, zero moments
+        @test all(abs.(bl) .< 1e-14)
     end
 
     @testset "C is even in theta, so tangency degenerates at the poles" begin

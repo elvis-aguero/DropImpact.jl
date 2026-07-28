@@ -51,7 +51,7 @@ function apply_clamp(am_free::AbstractVector, kappa::Vector{Float64}, p::Params)
 end
 
 """
-    unpack_state(chat, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p) -> (am, beta, zcm, f)
+    unpack_state(chat, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p) -> (am, beta, zcm, f, cm, bl)
 
 The evaluation chain of design doc §subsec:newton: pressure moments from `chat` at fixed
 `xc`, then the affine state advance eq:summary-states. `q` is the `contact_quad` tuple.
@@ -61,6 +61,11 @@ One coupling is iterated rather than evaluated once: the self-adjoint `b_l`
 depends on `b_l`. The fixed point converges because `lambda_l = O(δ²)` makes the map a
 strong contraction -- typically two or three passes. This is a genuine change from the
 earlier `w`-free `b_l`, for which the chain was acyclic.
+
+`cm` and `bl` are returned alongside the advanced states so callers can inspect the pressure
+moments directly -- design doc §subsubsec:compliance is explicit that only these, not the
+pointwise pressure, need converge, so a convergence study has to look at them, not just at
+`am`/`beta` (which also depend on the step history, confounding a pure truncation check).
 """
 function unpack_state(chat::AbstractVector, xc, q, kappa::Vector{Float64},
     alpha::Vector{Float64}, lambda::Vector{Float64}, gam::Vector{Float64},
@@ -71,7 +76,7 @@ function unpack_state(chat::AbstractVector, xc, q, kappa::Vector{Float64},
     @inbounds for l in 0:p.L
         beta[l+1] = gam[l+1]
     end
-    local xi, r, w
+    local xi, r, w, bl
     for _ in 1:12
         xi, r, w = geom_at_nodes(beta, x, P, dP, p.L)
         bl = b_l_all(chat, xc, x, wq, P, w, p.L)
@@ -86,7 +91,7 @@ function unpack_state(chat::AbstractVector, xc, q, kappa::Vector{Float64},
     p.wall === :clamped && (am = apply_clamp(am, kappa, p))
     f = com_force_closed(chat, xc, x, wq, w)
     zcm = mu + kappa_cm * f
-    return am, beta, zcm, f
+    return am, beta, zcm, f, cm, bl
 end
 
 """
@@ -104,7 +109,7 @@ function residual(chat::AbstractVector, xc, q, kappa::Vector{Float64},
     alpha::Vector{Float64}, lambda::Vector{Float64}, gam::Vector{Float64},
     kappa_cm::Float64, mu::Float64, p::Params)
     x, wq, P, dP, Ptil = q
-    am, beta, zcm, _ = unpack_state(chat, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p)
+    am, beta, zcm, _, _, _ = unpack_state(chat, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p)
     xi, r, w = geom_at_nodes(beta, x, P, dP, p.L)
     T = promote_type(eltype(chat), typeof(xc))
     R = zeros(T, p.N + 1)
