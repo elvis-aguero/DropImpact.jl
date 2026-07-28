@@ -16,7 +16,8 @@ shape or a discrete tangency search over mesh points.
 Output of `run_simulation` for the water case `We = 1.0958`, `Bo = 0.017`,
 `Oh = 0.006` at `M = L = 120`, `N = 6`. Dark blue is the bath, pale blue the
 droplet, and the red arc is the contact patch `θ ∈ [0, θ_c]`. The inset is the
-solved pressure profile over that patch — an output of the model, not an input.*
+solved pressure profile over that patch — an output of the model rather than a
+prescribed shape, though not a converged one; see "Choosing `M`, `L`, `N`".*
 
 It sits between two published models and takes something from each. From
 Alventosa, Cimpeanu & Harris (2023, *JFM* **958**, A24) — the "1PKM" — it takes the
@@ -63,24 +64,48 @@ net force `f`, tangency residual, Newton status.
 
 ### Choosing `M`, `L`, `N`
 
-`M` and `L` are set by convergence and `N` is not the important parameter, which
-is worth stating because it is counterintuitive. At `We = 1.0958`:
+`M` and `L` are set by convergence; `N` is a different kind of parameter and the
+distinction matters. Convergence is judged on **contact time**, not the
+coefficient of restitution — CoR is the easiest metric to converge and will look
+settled long before anything else is. At `We = 1.0958`:
 
-| `(M,L,N,nq)` | wall (s) | CoR | contact time | max width |
+| `(M,L,N,nq)` | wall (s) | contact time | CoR | max width |
 |---|---|---|---|---|
-| `(30,30,3,30)` | 68 | 0.5399 | 2.152 | 1.795 |
-| `(60,60,3,40)` | 24 | 0.2996 | 4.2624 | 1.1225 |
-| `(60,60,6,60)` | 52 | 0.2996 | 4.2624 | 1.1225 |
-| `(120,120,6,60)` | 99 | 0.2995 | 4.2646 | 1.1225 |
-| `(120,120,10,80)` | 177 | 0.2996 | 4.2646 | 1.1225 |
+| `(30,30,3,30)` | 68 | 2.152 | 0.5399 | 1.795 |
+| `(60,60,3,40)` | 24 | 4.2624 | 0.2996 | 1.1225 |
+| `(60,60,6,60)` | 52 | 4.2624 | 0.2996 | 1.1225 |
+| `(120,120,6,60)` | 99 | 4.2646 | 0.2995 | 1.1225 |
+| `(120,120,10,80)` | 177 | 4.2646 | 0.2996 | 1.1225 |
 
-`M = L = 30` is badly unconverged (a coefficient of restitution and width that
-are not physical). From `M = L = 60` the rebound metrics agree to four digits and
-refining further changes nothing. Raising `N` from 3 to 10 changes nothing at
-all: the compliance operator is compact, so pressure modes beyond a few sit in
-its numerical nullspace and do not affect the moments through which the pressure
-acts. Use `M = L = 60`, `N = 3`, `nq = 40` for production and treat larger `N`
-purely as a rendering nicety.
+`M = L = 30` is badly unconverged — a contact time half the correct value, and a
+width and CoR that are not physical. From `M = L = 60` contact time is settled to
+five digits and doubling the mode counts moves it by 0.05 %.
+
+**`N` does not converge the pressure, and should not be read as if it did.**
+Sweeping `N` along a real trajectory at `M = L = 60`:
+
+| `N` | contact time | CoR | max `r_c` | `‖Δp‖/‖p‖` vs `N=16` | `Δf/f` vs `N=16` |
+|---|---|---|---|---|---|
+| 2 | 4.26239 | 0.29959 | 0.8192 | — | — |
+| 3 | 4.26239 | 0.29959 | 0.8183 | 0.46 – 0.96 | 1e-5 – 1e-2 |
+| 6 | 4.26239 | 0.29960 | 0.8124 | | |
+| 10 | 4.26239 | 0.29962 | 0.8062 | | |
+| 16 | 4.26239 | 0.29962 | 0.7999 | | |
+
+Contact time is identical to six significant figures across the whole range,
+while the solved pressure *profile* at `N = 3` differs from `N = 16` by 46–96 %
+in relative L2 over the patch. Both facts are real and they are not in tension:
+the compliance operator is compact, so pressure modes beyond a few sit in its
+numerical nullspace, and the pressure influences the dynamics *only* through the
+moments `c_m`, `b_l`, `f` — which agree to between `1e-5` and `1e-2`. Refining
+`N` buys a different-looking pressure profile and the same physics.
+
+So use `M = L = 60`, `N = 3`, `nq = 40` for trajectories, but do not quote the
+pointwise pressure as a converged output of the model at any `N`. The one
+observable that does drift with `N` is the maximum contact radius (0.8192 down to
+0.7999, monotonically, and *away* from the DNS value 0.8821) — which is the
+observable most sensitive to the pressure profile, and is also the one already
+carrying an open discrepancy. That is a lead, not a coincidence.
 
 ## Validation
 
@@ -109,7 +134,13 @@ droplet width against DNS, 0.1345 for the position of the droplet's top and
 One discrepancy is open and is not a resolution effect: the contact radius
 reaches its maximum at `τ ≈ 0.89` against the DNS value `τ ≈ 1.46`, and doubling
 `M` and `L` moves that by 0.02. The patch grows and recedes too quickly even
-though the total contact time is accurate to 3 %.
+though the total contact time is accurate to 3 %. Refining `N` makes the peak
+*worse*, which points at the unresolved pressure profile as the mechanism.
+
+Low Weber numbers are currently pathologically slow — a single `We ≈ 0.012` run
+does not finish in the time a `We ≈ 1` run takes forty times over. The cause is
+not yet diagnosed, and `scripts/validate_sweep.jl` should not be expected to
+complete across the full published range until it is.
 
 ## Rendering
 

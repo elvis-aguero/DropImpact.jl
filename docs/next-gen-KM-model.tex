@@ -420,6 +420,34 @@ and recedes too quickly even though the total contact time is accurate to $3\%$.
 this is a resolution effect or a defect of the closure is not settled here; it is the
 natural first target for the next iteration.
 
+A resolution study sharpens \S\ref{subsubsec:compliance}'s weak-determinacy finding, and
+does so on a real trajectory rather than the synthetic state used there. Sweeping the
+pressure truncation at $M=L=60$, the contact time is $4.26239$ at every one of
+$N=2,3,6,10,16$ --- identical to six significant figures --- while the solved pressure
+profile at $N=3$ differs from that at $N=16$ by $46$ to $96\%$ in relative $L^2$ over the
+patch, and the net force by between $10^{-5}$ and $10^{-2}$. Both statements are correct
+and they are not in tension: the pressure acts on the dynamics only through $c_m$, $b_l$
+and $f$, and the modes that distinguish $N=3$ from $N=16$ lie in the numerical nullspace
+of $\mathcal A$. The practical consequence is that trajectories may be computed at $N=3$,
+but the pointwise pressure must not be quoted as a converged output at any $N$ --- which
+is the same conclusion \S\ref{subsubsec:compliance} reaches from the operator's spectrum,
+now confirmed dynamically.
+
+One observable does drift with $N$: the maximum contact radius falls monotonically from
+$0.8192$ at $N=2$ to $0.7999$ at $N=16$, moving \emph{away} from the DNS value $0.8821$.
+That the single quantity most sensitive to the pressure profile is also the one carrying
+the open timing discrepancy is unlikely to be a coincidence, and is the most concrete lead
+available for it. Convergence is judged here on contact time rather than the coefficient
+of restitution deliberately: the latter settles far earlier than anything else and would
+have reported convergence at mode counts where the contact time is still wrong by a factor
+of two ($M=L=30$ gives $2.15$ against the converged $4.26$).
+
+A separate practical limitation, recorded because it bounds what can currently be
+validated: at low Weber number the scheme becomes pathologically slow, with a
+$\We\approx0.012$ run failing to complete in many times the wall-clock of a $\We\approx1$
+run. The cause is not diagnosed here, and it prevents a sweep across the full published
+$\We$ range for the time being.
+
 The implementation exercises exactly the structure derived above, and two of its details
 were forced by measurement rather than chosen. First, reducing the time step does
 \emph{not} help a step whose candidates all fail the non-intersection filter: the
