@@ -1,6 +1,6 @@
 # A fully spectral kinematic match for droplet–bath impact
 
-[![CI](https://github.com/elvis-aguero/DropImpact.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/elvis-aguero/DropImpact.jl/actions/workflows/ci.yml)
+[![CI](https://github.com/elvis-aguero/SpectralKM.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/elvis-aguero/SpectralKM.jl/actions/workflows/ci.yml)
 
 This repository is the numerical companion to a model of non-coalescing droplet
 impact on a liquid bath in which **both** interfaces are spectral and the contact
