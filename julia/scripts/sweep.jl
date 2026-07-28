@@ -2,7 +2,7 @@
 #
 # Usage:  julia --project=. -t auto scripts/sweep.jl [options] [We ...]
 #
-#   --wall=free|pinned   bath wall condition (default free; see design doc §subsubsec:wall)
+#   --wall=free|pinned|clamped   bath wall condition (default free; design doc §subsubsec:wall)
 #   --Bo= --Oh= --M= --L= --N= --nq= --t_end=      physics and truncation
 #   --out=PATH           CSV to write/append (default data/sweep_<wall>.csv)
 #   --workers=N          skip auto-selection and use N workers

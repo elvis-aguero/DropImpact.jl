@@ -32,6 +32,25 @@ function contact_quad(xc::Float64, p::Params)
 end
 
 """
+    apply_clamp(am_free, kappa, p) -> am
+
+For `p.wall == :clamped` (design doc eq:route-b-multiplier), applies the rank-one
+correction carrying the rim multiplier Λ to a diagonal bath response `am_free = alpha +
+kappa.*cm` (or, in free flight, `alpha` alone with `cm≡0` -- pinning must hold there too,
+not only while a Newton solve is running). Λ is eliminated in closed form: solving the
+pinning constraint `sum_m am[m]*j0kb[m] = 0` for Λ and substituting back gives
+`Λ = -sum_m am_free[m]*j0kb[m] / D` with `D = (2/b)*sum(kappa)`. `D` is recomputed every
+call since `kappa` varies with the step size; `p.j0kb[m] = J_0(k_m b)` never vanishes on
+the Neumann set (never zero for m>=1, and j0kb[1]=J_0(0)=1 for the piston, whose kappa=0
+kills its own term regardless).
+"""
+function apply_clamp(am_free::AbstractVector, kappa::Vector{Float64}, p::Params)
+    D = (2 / p.b) * sum(kappa)
+    Lambda = -sum(am_free .* p.j0kb) / D
+    return am_free .+ (2 / p.b) .* kappa .* Lambda ./ p.j0kb
+end
+
+"""
     unpack_state(chat, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p) -> (am, beta, zcm, f)
 
 The evaluation chain of design doc §subsec:newton: pressure moments from `chat` at fixed
@@ -64,6 +83,7 @@ function unpack_state(chat::AbstractVector, xc, q, kappa::Vector{Float64},
     xi, r, w = geom_at_nodes(beta, x, P, dP, p.L)
     cm = c_m_all(chat, xc, x, wq, r, w, p.k, p.bath_norm)
     am = alpha .+ kappa .* cm
+    p.wall === :clamped && (am = apply_clamp(am, kappa, p))
     f = com_force_closed(chat, xc, x, wq, w)
     zcm = mu + kappa_cm * f
     return am, beta, zcm, f

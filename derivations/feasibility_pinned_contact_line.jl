@@ -45,9 +45,10 @@
 #
 # CONCLUSION: route (B). An earlier revision of this script concluded the opposite, on the
 # strength of a wall-slope diagnostic that was measuring its own grid spacing; section (1b)
-# reproduces that artifact deliberately so the mistake stays visible. Route (A) is what the
-# package currently implements as the non-default `wall=:pinned`, and it should be read as a
-# diagnostic rather than a physical model.
+# reproduces that artifact deliberately so the mistake stays visible. Route (A) is the
+# non-default `wall=:pinned` and should be read as a diagnostic rather than a physical
+# model. Route (B) is `wall=:clamped`: same Neumann basis and weight as `:free`, pinning
+# applied by the multiplier of section (4)-(5) at every step including free flight.
 #
 # This script checks: (1) how well the Neumann set represents a pinned profile, analytically;
 # (1b) the retracted artifact; (3) route (A)'s wall leak and (3b) its
@@ -234,4 +235,80 @@ let delta = 1e-3, a = 1.5, h0 = 3.0, Oh = 0.006, Bo = 0.017
     println("  Note kappa_0 = 0 exactly: the rim line force cannot drive the piston mode, so")
     println("  route (B) pins the surface WITHOUT moving volume. It does not reintroduce the")
     println("  defect of section (3b) -- which is the decisive argument in its favour.")
+end
+
+println()
+println("="^78)
+println("(5) Route (B) end to end: well-definedness, the constraint, self-adjointness, sign")
+println("="^78)
+println("Section (4) checked D = (2/b) sum kappa_m in isolation. This section assembles the")
+println("actual (M+1)x(M+1) operator")
+println()
+println("  A_mn = kappa_m delta_mn - (2 kappa_m kappa_n J_0(k_n b)) / (b D J_0(k_m b))")
+println()
+println("(the m,n = 0 index is the piston; kappa_0 = 0 kills that whole row/column) and checks")
+println("every claim made about it in the design doc numerically, not just in isolation.")
+println()
+println("(5a) Is J_0(k_m b) ever zero on the Neumann set? It cannot be: J_0' = -J_1, so a")
+println("common zero of J_0 and J_1 would force J_0 itself to vanish to second order at that")
+println("point, which for a solution of Bessel's (linear, 2nd-order) ODE forces J_0 = 0")
+println("identically -- false. So 1/J_0(k_m b) in the m-th term of a_m, and in A_mn above, is")
+println("never a division by zero, though only D (section 4) is actually needed once the")
+println("J_0(k_m b) factors cancel in the closed form.")
+let delta = 1e-3, a = 1.5, h0 = 3.0, Oh = 0.006, Bo = 0.017
+    kappa_of(km) = (-2 * delta^2 * km * tanh(km * h0)) /
+                   (a * (a + 4 * delta * Oh * km^2) + delta^2 * (km^2 + Bo) * km * tanh(km * h0))
+    @printf("  %-6s %-16s %-20s\n", "M", "min |J_0(k_m b)|", "max |kappa_m/J_0(k_m b)|")
+    for M in (40, 160, 640, 2560)
+        k = bessel_zeros_J1(M) ./ B
+        mn = minimum(abs(besselj0(km * B)) for km in k[2:end])
+        mx = maximum(abs(kappa_of(km) / besselj0(km * B)) for km in k[2:end])
+        @printf("  %-6d %-16.4e %-20.4e\n", M, mn, mx)
+    end
+    println("  |J_0(k_m b)| itself decays (the generic ~m^(-1/2) Bessel envelope, not a")
+    println("  near-miss with a zero -- consistent with (5a)'s proof it never reaches zero).")
+    println("  What matters is the PRODUCT kappa_m/J_0(k_m b), the per-mode term that actually")
+    println("  appears in a_m: since kappa_m ~ -2/k_m^2 ~ m^(-2), the product falls as m^(-3/2)")
+    println("  and its max (at the smallest nonzero mode) does not grow with M -- no term in")
+    println("  the sum blows up as the truncation is refined.")
+end
+
+println()
+println("(5b)-(5d): assemble A at a representative step (M=40, same delta/h0/Oh/Bo as (4)),")
+println("and check (b) the constraint holds for the OPERATOR, not just a measured D -- i.e.")
+println("sum_m A_mn J_0(k_m b) = 0 for every column n, not merely for one solved-for c;")
+println("(c) self-adjointness in the pairing w_m = J_0(k_m b)^2 that section 4 and the design")
+println("doc's compliance-operator section both use; (d) that -A stays the same sign as -A_free")
+println("(=-diag(kappa), already shown all >=0 in section 4) once the rank-one term is added.")
+let delta = 1e-3, a = 1.5, h0 = 3.0, Oh = 0.006, Bo = 0.017, M = 40
+    kappa_of(km) = (-2 * delta^2 * km * tanh(km * h0)) /
+                   (a * (a + 4 * delta * Oh * km^2) + delta^2 * (km^2 + Bo) * km * tanh(km * h0))
+    k = bessel_zeros_J1(M) ./ B
+    kaps = kappa_of.(k)
+    j0kb = besselj0.(k .* B)
+    D = (2 / B) * sum(kaps)
+    Amat = [kaps[m] * (m == n ? 1.0 : 0.0) - (2 * kaps[m] * kaps[n] * j0kb[n]) / (B * D * j0kb[m])
+            for m in eachindex(k), n in eachindex(k)]
+
+    colsum = [sum(Amat[m, n] * j0kb[m] for m in eachindex(k)) for n in eachindex(k)]
+    println("  (b) max_n |sum_m A_mn J_0(k_m b)|: ", @sprintf("%.2e", maximum(abs, colsum)),
+            "  (should be ~roundoff: the constraint is an IDENTITY of A, true for every c)")
+
+    w = j0kb .^ 2
+    W = Diagonal(w)
+    WA = W * Amat
+    asym = norm(WA - WA') / norm(WA + WA')
+    println("  (c) relative asymmetry of W*A, W=diag(J_0(k_m b)^2): ", @sprintf("%.2e", asym),
+            "  (should be ~1e-16, matching the free operator's own self-adjointness measurement)")
+
+    Whalf = Diagonal(sqrt.(w))
+    S = Whalf * Amat * inv(Whalf)          # similarity transform: same eigenvalues, now symmetric
+    S = (S + S') / 2                        # roundoff-symmetrize before eigen
+    ev = eigvals(S)
+    ev_free = kaps                          # A_free's eigenvalues are just kappa_m (diagonal)
+    @printf("  (d) eigenvalues: A_free in [%.3e, %.3e], A_clamped in [%.3e, %.3e]\n",
+            minimum(ev_free), maximum(ev_free), minimum(ev), maximum(ev))
+    println("      all <= 0 for both (-A stays positive semidefinite): ",
+            all(<=(1e-10 * maximum(abs, ev)), ev_free), " and ", all(<=(1e-10 * maximum(abs, ev)), ev))
+    println("      -> the rank-one rim-force correction does not flip the operator's sign.")
 end

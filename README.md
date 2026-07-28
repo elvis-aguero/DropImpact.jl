@@ -127,15 +127,15 @@ pointwise pressure as a converged output at any `N`.
 
 ### Wall condition
 
-`Params(...; wall = :free | :pinned)` selects the free-surface condition at the
-container wall `r = b`.
+`Params(...; wall = :free | :pinned | :clamped)` selects the free-surface condition
+at the container wall `r = b`.
 
-| | `:free` (default) | `:pinned` |
-|---|---|---|
-| condition at `r = b` | `∂η/∂r = 0` | `η = 0` |
-| contact line | 90°, free to slide | pinned at the triple point |
-| eigenvalues | zeros of `J_1`, plus `k_0 = 0` | zeros of `J_0`, no `k_0 = 0` |
-| Fourier–Bessel weight | `2/(b J_0(k_m b))²` | `2/(b J_1(k_m b))²` |
+| | `:free` (default) | `:pinned` | `:clamped` |
+|---|---|---|---|
+| condition at `r = b` | `∂η/∂r = 0` | `η = 0` | `η = 0` |
+| contact line | 90°, free to slide | pinned, wall slope free | pinned (route B) |
+| eigenvalues | zeros of `J_1`, plus `k_0 = 0` | zeros of `J_0`, no `k_0 = 0` | same as `:free` |
+| Fourier–Bessel weight | `2/(b J_0(k_m b))²` | `2/(b J_1(k_m b))²` | same as `:free` |
 
 `:free` is the configuration of both parent papers. `:pinned` implements route (A)
 of `derivations/feasibility_pinned_contact_line.jl`: the surface is pinned exactly
@@ -153,10 +153,26 @@ translate uniformly.
 > nothing, four times the droplet's own volume**. `:pinned` also breaks no-flux at
 > leading order, and none of the closure diagnostics (self-adjointness, conditioning,
 > the tangency root) have been re-measured under it.
->
-> The consistent route keeps the `:free` basis and imposes pinning with a multiplier —
-> the rim line force — which conserves volume exactly since `κ_0 = 0`. **That is the
-> recommended formulation and it is not yet implemented.**
+
+`:clamped` implements route (B): the `:free` basis and weight, unchanged, with pinning
+imposed as a scalar constraint `Σ a_m J_0(k_m b) = 0` carried by a Lagrange multiplier —
+physically the line force the rim exerts on the contact line. Applied at every step,
+including free flight (pinning constrains `a_m` itself, not a byproduct of contact
+pressure). It is the recommended formulation, since `κ_0 = 0` means the multiplier can
+never drive the piston mode — pinning by constraint does not reopen `:pinned`'s volume
+defect. Over the reference impact, `:clamped` holds *both* `|η(b,τ)|` and `|∫η r dr|` at
+roundoff simultaneously (`7e-17` and `2e-14`), where `:pinned` traded one for the other.
+The algebra is verified at operator level in `derivations/feasibility_pinned_contact_line.jl`
+§5 (constraint exact to `5e-22`, self-adjoint to `1.1e-17`, sign preserved for any step,
+not just the one measured) — but the step-level closure diagnostics of §subsec:contact and
+§subsubsec:compliance in the design doc (conditioning, resolvable pressure dimension, the
+tangency root) are still `:free` measurements, not yet repeated for `:clamped` at a real
+contact step. `:free` vs `:clamped` is negligible at the production default `b = 6`
+(`ΔCoR = -0.001`) but far outside step-controller noise once the bath is smaller —
+and not monotone in `b` (`+0.26` at `b=4`, `+0.11` at `b=3`, `+0.07` at `b=2`, `-0.21` at
+`b=1.5`), consistent with a container resonance crossing the impact timescale as `k_m`
+scales with `1/b`. The wall condition matters for a small bath and not for `b = 6`; this
+is a gate, not a `b`-convergence study.
 
 There is also a continuum result worth knowing before choosing either: with no-flux
 walls in a rigid container, `∂_τ[∂_rη(b)] = O(Oh)`, so **the wall slope is frozen**.
@@ -291,7 +307,7 @@ affine reduction, the inner Galerkin residual, and the contact-step machinery.
 | `audit_compliance_operator.jl` | Self-adjointness, definiteness, `δ`-scaling and resolvable rank of the pressure→gap compliance operator. |
 | `audit_nested_closure.jl` | The inner system's conditioning is flat in `δ` and of order unity, against `~1e18` for the joint system it replaces. |
 | `audit_weak_determinacy.jl` | Which functionals converge in `N` and which do not, and the identifiability of the self-adjointness diagnosis. |
-| `feasibility_pinned_contact_line.jl` | The pinned-wall study: why the no-flux basis converges to a pinned profile after all (`M^(-3/2)`, analytically), why the Dirichlet basis loses volume conservation, and the retracted grid artifact that argued otherwise. |
+| `feasibility_pinned_contact_line.jl` | The pinned-wall study: why the no-flux basis converges to a pinned profile after all (`M^(-3/2)`, analytically), why the Dirichlet basis loses volume conservation, the retracted grid artifact that argued otherwise, and (§5) the operator-level verification behind `wall=:clamped`. |
 | `probe_global_basis_argmin.jl` | Records a formulation that **fails**: a global pressure basis with weakly-imposed zero pressure off the patch, selected by minimising an integrated residual. |
 
 Scripts marked `SUPERSEDED` in their header verify claims that have since been

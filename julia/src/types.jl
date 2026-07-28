@@ -19,6 +19,8 @@ Physical and numerical parameters for one simulation, fixed for its whole durati
 - `b`: bath radius (nondim by droplet radius R).  `h0`: bath depth (nondim by R).
 - `nq`: number of Gauss-Legendre quadrature points for the c_m/W_n^{(m)} projections.
 - `k`: bath eigenvalues, length M+1, `k[m+1] = k_m` (roots of J1(k_m b)=0, plus k_0=0).
+- `j0kb`: `J_0(k_m b)`, length M+1, precomputed once since `k,b` are fixed for the run.
+  Used only by `wall=:clamped` (design doc eq:route-b-multiplier); unused otherwise.
 - `gauss_nodes, gauss_weights`: precomputed nq-point Gauss-Legendre rule on [-1,1], used
   for the genuinely transcendental `c_m`/`W_n^{(m)}` projections (eq:c_m-Wn), where `nq`
   is a real numerical-accuracy trade-off chosen by the user.
@@ -40,6 +42,7 @@ struct Params
     wall::Symbol
     k::Vector{Float64}
     bath_norm::Vector{Float64}
+    j0kb::Vector{Float64}
     gauss_nodes::Vector{Float64}
     gauss_weights::Vector{Float64}
     com_nodes::Vector{Float64}
@@ -90,23 +93,48 @@ the bath eigenvalues and the Fourier-Bessel weight (design doc eq:bessel-norm):
     semidefiniteness, conditioning, the tangency root — are all `:free` measurements that
     have NOT been repeated for `:pinned`.
 
-    The consistent formulation is instead to keep the `:free` basis and impose pinning with
-    a multiplier (the rim line force), which conserves volume exactly since `κ_0 = 0`. It is
-    the recommended route and is not yet implemented. Note also that no-flux walls freeze
-    the wall slope to O(Oh) in a rigid container, so a time-varying wall slope is not
-    something a consistent model needs to represent in the first place. See
-    `derivations/feasibility_pinned_contact_line.jl` for the derivations and measurements.
+    The consistent formulation instead keeps the `:free` basis and imposes pinning with a
+    multiplier (the rim line force), which conserves volume exactly since `κ_0 = 0` — see
+    `wall=:clamped` below. Note also that no-flux walls freeze the wall slope to O(Oh) in a
+    rigid container, so a time-varying wall slope is not something a consistent model needs
+    to represent in the first place. See `derivations/feasibility_pinned_contact_line.jl`
+    for the derivations and measurements.
+
+  `:clamped` The `:free` (Neumann) basis and eigenvalues, unchanged, with pinning
+             `η(b,τ) = 0` imposed as a scalar constraint carried by a Lagrange multiplier Λ
+             — physically the line force the rim exerts on the contact line (design doc
+             eq:route-b-multiplier). Route B: conserves volume exactly (same `κ_0 = 0`
+             argument as `:free`, since the multiplier only ever multiplies `κ_m`) while
+             pinning exactly, at the cost of one `O(M)` dot product per step. Verified at
+             operator level in `derivations/feasibility_pinned_contact_line.jl` §5: the
+             constraint holds for the assembled response operator to `5e-22`, the rank-one
+             correction is self-adjoint in the same weighted pairing the free operator uses
+             (`1.1e-17` relative asymmetry), and positive semidefiniteness of `-𝒜` is
+             preserved for any admissible step, not just the one measured. Applied at every
+             step, including free flight — pinning is a constraint on `a_m` itself, not a
+             byproduct of contact pressure. Measured over the reference impact, `:clamped`
+             holds `|η(b,τ)|` and `|∫_0^b η r dr|` at roundoff simultaneously (7e-17 and
+             2e-14), where `:pinned` traded one for the other. The step-level closure
+             diagnostics of §subsec:contact/§subsubsec:compliance — conditioning of the
+             assembled nonlinear system, the resolvable pressure dimension, the tangency
+             root — remain `:free` measurements not yet repeated for `:clamped` at a real
+             contact step, and whether `:free` and `:clamped` differ in contact time or CoR
+             beyond step-controller noise at `b=6` has not been measured.
 """
 function Params(; We, Bo, Oh, M, L, N, b, h0, nq, wall::Symbol=:free)
-    wall in (:free, :pinned) || throw(ArgumentError("wall must be :free or :pinned, got $wall"))
-    kvals = (wall === :free ? bessel_zeros_J1(M) : bessel_zeros_J0(M)) ./ b
+    wall in (:free, :pinned, :clamped) ||
+        throw(ArgumentError("wall must be :free, :pinned or :clamped, got $wall"))
+    kvals = (wall === :pinned ? bessel_zeros_J0(M) : bessel_zeros_J1(M)) ./ b
     # Squared-norm weight 2/‖J_0(k_m ·)‖² with ‖·‖² = ∫_0^b J_0(k_m r)² r dr, which equals
     # (b²/2)J_0(k_m b)² when J_1(k_m b) = 0 and (b²/2)J_1(k_m b)² when J_0(k_m b) = 0.
-    bath_norm = [2 / (b * (wall === :free ? besselj0(k * b) : besselj1(k * b)))^2 for k in kvals]
+    # `:clamped` reuses the `:free` (Neumann) basis and weight — pinning is imposed on top
+    # by a multiplier, not by changing the basis (design doc §subsubsec:wall, route B).
+    bath_norm = [2 / (b * (wall === :pinned ? besselj1(k * b) : besselj0(k * b)))^2 for k in kvals]
+    j0kb = [besselj0(k * b) for k in kvals]
     nodes, weights = gauss_legendre_nodes(nq)
     com_nq = min_nq_for_exact_com(N, L)
     com_nodes, com_weights = gauss_legendre_nodes(com_nq)
-    return Params(We, Bo, Oh, M, L, N, b, h0, nq, wall, kvals, bath_norm,
+    return Params(We, Bo, Oh, M, L, N, b, h0, nq, wall, kvals, bath_norm, j0kb,
                   nodes, weights, com_nodes, com_weights)
 end
 

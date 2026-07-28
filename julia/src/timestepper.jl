@@ -33,14 +33,16 @@ function gap_at_pole(bath::BathModeState, drop::DropModeState, com::COMState, L:
 end
 
 """Advance one BDF2 step with zero pressure forcing (`c_m=b_l=f=0`): the free-flight
-update. No Newton solve — `a_m,β_l,z_cm` are pure history recursions."""
+update. No Newton solve — `a_m,β_l,z_cm` are pure history recursions. `apply_clamp` still
+applies here for `p.wall == :clamped` (`residual.jl`): pinning is a constraint on `a_m`
+itself, not a byproduct of contact, so it must hold in free flight too."""
 function free_flight_step(hist::SimHistory, dt::Float64, p::Params)
     dtprev = hist.curr.dt
     kappa, alpha = bath_affine(hist.curr.bath, hist.prev.bath, p, dt, dtprev)
     lambda, gam = drop_affine(hist.curr.drop, hist.prev.drop, p, dt, dtprev)
     kappa_cm, mu = com_affine(hist.curr.com, hist.prev.com, p, dt, dtprev)
 
-    a_new = alpha  # c_m ≡ 0
+    a_new = p.wall === :clamped ? apply_clamp(alpha, kappa, p) : alpha  # c_m ≡ 0
     beta_new = gam # b_l ≡ 0
     z_new = mu     # f ≡ 0
 
