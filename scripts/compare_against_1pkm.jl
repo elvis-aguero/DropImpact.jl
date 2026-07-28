@@ -1,8 +1,9 @@
 # COMPARISON (not validation) against Alventosa et al. (2023)'s own 1PKM predictions, digitized
-# from km-dropplet-onto-bath's water_QPExp_DNS_3panel_FFF figure (julia/data/reference/).
-# NOT a bit-for-bit match target (this is a genuinely different closure — see design doc's
-# own framing, §subsec:accel-motivation) — a plausibility check that trends (max
-# penetration depth, coefficient of restitution, contact time vs. We) are in the right
+# from km-dropplet-onto-bath's water_QPExp_DNS_3panel_FFF figure (data/reference/).
+# NOT a bit-for-bit match target (this model solves for the contact pressure and radius
+# rather than assuming a prescribed pressure shape, a genuinely different closure) — a
+# plausibility check that trends (max penetration depth, coefficient of restitution,
+# contact time vs. We) are in the right
 # ballpark, at the SAME (Bo,Oh) slice the reference data was generated at: water,
 # Bo=0.017, Oh=0.006 (rho=1 g/cm^3, sigma=72.20 dyn/cm, nu=0.98e-2 cm^2/s, R=0.035 cm,
 # g=981 cm/s^2 — confirmed against km-dropplet-onto-bath/matlab/1_code/ctime_maxdef_alfa.m

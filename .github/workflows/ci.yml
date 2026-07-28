@@ -21,11 +21,7 @@ jobs:
           version: ${{ matrix.julia-version }}
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
-        with:
-          project: julia
       - uses: julia-actions/julia-runtest@v1
-        with:
-          project: julia
 
   cas-derivations:
     name: CAS re-derivation scripts (Symbolics.jl)
@@ -45,10 +41,10 @@ jobs:
       # seconds, so there is no reason for it not to gate every push.
       - name: Run verify_legendre_pressure_basis.jl
         run: julia --project=derivations derivations/verify_legendre_pressure_basis.jl
-      # This one runs against the PACKAGE project, not derivations/, so it needs its own
-      # instantiate step -- the job above only sets up derivations/.
-      - name: Instantiate julia/ project
-        run: julia --project=julia -e 'using Pkg; Pkg.instantiate()'
+      # This one runs against the PACKAGE project (root), not derivations/, so it needs its
+      # own instantiate step -- the job above only sets up derivations/.
+      - name: Instantiate root package project
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
       # Backs every number quoted in the design doc's wall-condition subsection.
       - name: Run feasibility_pinned_contact_line.jl
-        run: julia --project=julia derivations/feasibility_pinned_contact_line.jl
+        run: julia --project=. derivations/feasibility_pinned_contact_line.jl

@@ -12,7 +12,7 @@ shape or a discrete tangency search over mesh points.
 
 ![Impact simulation](assets/impact_demo.gif)
 
-*(Full-resolution MP4: `julia/output/media/impact_We1.0958_hires.mp4`.)
+*(Full-resolution MP4: `output/media/impact_We1.0958_hires.mp4`.)
 Output of `run_simulation` for the water case `We = 1.0958`, `Bo = 0.017`,
 `Oh = 0.006` at `M = L = 120`, `N = 6`. Dark blue is the bath, pale blue the
 droplet, and the red arc is the contact patch `θ ∈ [0, θ_c]`. The inset is the
@@ -31,20 +31,21 @@ search rather than an unknown in a joint algebraic system.
 
 | Path | Contents |
 |---|---|
-| `julia/` | The `SpectralKM` package: model, time stepper, validation and rendering scripts. |
-| `julia/notebooks/tutorial.ipynb` | Guided tour: run an impact, read the diagnostics, compare wall conditions. Dependency-free (SVG figures). |
-| `julia/scripts/sweep.jl` | Parallel parameter sweep; picks its own worker count by measuring, and is resumable. |
-| `docs/next-gen-KM-model.tex` | The model derivation — the physics ground truth for `julia/`. Includes a section recording arguments from earlier revisions that were wrong, and why. |
+| `src/`, `test/` | The `SpectralKM` package (root `Project.toml`): model, time stepper, test suite. |
+| `scripts/` | Validation, rendering, and sweep scripts. |
+| `notebooks/tutorial.ipynb` | Guided tour: run an impact, read the diagnostics, compare wall conditions. Dependency-free (SVG figures). |
+| `scripts/sweep.jl` | Parallel parameter sweep; picks its own worker count by measuring, and is resumable. |
+| `docs/next-gen-KM-model.tex` | The model derivation — the physics ground truth for this package. Includes a section recording arguments from earlier revisions that were wrong, and why. |
 | `docs/BouncingDroplets.tex`, `docs/Deformable_impactors.tex` | The two parent papers, for reference and for the claims the derivation makes about them. |
 | `derivations/` | CAS and numerical audit scripts backing specific claims in the `.tex`. Every measurement the document quotes is produced by one of them. |
 
 ## Setup
 
-Requires Julia 1.10+ and, for the renderer only, `ffmpeg` on `PATH`. The package
+Requires Julia 1.12+ and, for the renderer only, `ffmpeg` on `PATH`. The package
 itself has no plotting dependency.
 
 ```bash
-cd julia && julia --project=. -e 'using Pkg; Pkg.instantiate()'
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
 ## Running a simulation
@@ -59,7 +60,7 @@ p = Params(We = 1.0958, Bo = 0.017, Oh = 0.006,   # water, R = 0.35 mm
 levels, diag, phases = run_simulation(p; t_end = 8.0, dt_init = 1e-3)
 ```
 
-New here? Start with **`julia/notebooks/tutorial.ipynb`** — a guided tour of the model,
+New here? Start with **`notebooks/tutorial.ipynb`** — a guided tour of the model,
 the diagnostics, the contact-time trap below, and the wall conditions. It has no
 plotting dependency either: figures are emitted as SVG.
 
@@ -186,7 +187,6 @@ convergence is `M^(-3/2)` and the slope is recovered at every `r < b`.
 ## Validation
 
 ```bash
-cd julia
 julia --project=. scripts/validate_trajectory.jl   # vs experiment + DNS
 julia --project=. scripts/validate_experimental.jl  # vs measured trajectories + error bars
 ```
@@ -229,7 +229,6 @@ between a closure defect and a definition mismatch, so this stays open.
 ### Sweeps
 
 ```bash
-cd julia
 julia --project=. -t auto scripts/sweep.jl --wall=free 0.2 0.4 1.0958 3.0
 ```
 
@@ -281,14 +280,14 @@ cost `We ≈ 0.3` about twenty times its neighbours' wall time.
 julia --project=. scripts/make_video.jl [We] [outfile.mp4] [M] [L] [N] [nq]
 ```
 
-Writes an MP4 to `julia/output/media/`. Dependency-free by construction: it
+Writes an MP4 to `output/media/`. Dependency-free by construction: it
 rasterises PPM frames itself and pipes them to `ffmpeg`, so the library never
 acquires a plotting stack.
 
 ## Tests
 
 ```bash
-cd julia && julia --project=. -e 'using Pkg; Pkg.test()'
+julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
 CI runs the same command on every push to `main` and `dev`
