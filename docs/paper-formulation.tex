@@ -1,0 +1,357 @@
+\section{Problem formulation}
+\label{sec:formulation}
+
+We consider the axisymmetric, non-coalescing normal impact of a liquid droplet on a deep liquid bath. At $t=0$ the droplet's centre of mass is a distance $R$ (its undeformed radius) above the undisturbed bath surface, its interface is spherical, and it carries no surface deformation velocity relative to its own centre of mass. The droplet has density $\rho$, kinematic viscosity $\nu$ and surface tension $\sigma$; the bath is taken to be the same fluid, following \cite{AlventosaEtAl2023}. Non-coalescence is maintained by a thin intervening air layer, whose own dynamics are neglected: the layer is assumed thin enough that it transmits pressure between the two interfaces without otherwise participating in the force balance, the standard lubrication-limit assumption for this problem \citep{AlventosaEtAl2023,AgueroEtAl2026}. Deformations of both interfaces are assumed small, so that the governing equations may be linearised about the undisturbed states -- a flat bath and a spherical droplet.
+
+Cylindrical coordinates $(r,z)$ describe the bath, with $z=0$ the undisturbed free surface, $z$ increasing away from the bath, and gravity acting in $-\hat z$. Spherical coordinates $(\xi,\theta)$, sharing the same axis, are centred on the droplet's instantaneous centre of mass, with $\theta=0$ along $-\hat z$, so $\theta=0$ marks the point of the droplet nearest the bath. Axisymmetry removes any dependence on azimuth throughout.
+
+Lengths are scaled by $R$, time by $t_\sigma=\sqrt{\rho R^3/\sigma}$, force by $2\pi\sigma R$, and pressure by $2\sigma/R$, giving the Weber, Bond and Ohnesorge numbers
+\begin{equation}
+    \We=\frac{\rho R V_0^2}{\sigma}\text{,}\qquad
+    \Bo=\frac{g t_\sigma^2}{R}\text{,}\qquad
+    \Oh=\frac{\nu}{\sqrt{\sigma R/\rho}}\text{,}
+    \label{eq:nondim}
+\end{equation}
+with $V_0$ the impact speed at $t=0$, following the nondimensionalisation of \cite{AlventosaEtAl2023}. We write $\tau=t/t_\sigma$ for nondimensional time.
+
+The bath interface height and the droplet radius are each represented by a truncated spectral expansion,
+\begin{equation}
+    \eta(r,\tau) = \sum_{m=0}^{M} a_m(\tau)\,J_0(k_mr)\text{,}\qquad
+    \xi(\theta,\tau) = 1+\sum_{l=2}^{L}\beta_l(\tau)\,P_l(\cos\theta)\text{,}
+    \label{eq:eta-xi}
+\end{equation}
+with $J_0$ the zeroth-order Bessel function of the first kind and $P_l$ the Legendre polynomials; the bath is truncated at $M$ Fourier--Bessel modes and the droplet at $L$ Legendre modes. Neither the $l=0$ mode (excluded by the incompressibility of the droplet) nor $l=1$ (governed instead by the centre-of-mass motion, \S\ref{sec:drop}) appears in the droplet sum. The centre of mass itself sits at height $z_{cm}(\tau)$ above the undisturbed bath level. A point on the droplet surface at polar angle $\theta$ lies, in the bath's cylindrical frame, at
+\begin{equation}
+    r(\theta,\tau) = \xi(\theta,\tau)\sin\theta\text{,}\qquad
+    z_d(\theta,\tau) = \xi(\theta,\tau)\cos\theta\text{,}
+    \label{eq:forward-map}
+\end{equation}
+a distance $z_d$ below the centre of mass, so that its absolute height is $z_{cm}(\tau)-z_d(\theta,\tau)$; the two interfaces coincide at $\theta$ exactly when $\eta\big(r(\theta,\tau),\tau\big)=z_{cm}(\tau)-z_d(\theta,\tau)$. Equation~\eqref{eq:forward-map} is used only in this forward direction, from $\theta$ to $(r,z_d)$, throughout the paper; it is never inverted for $\theta$ given $r$. We write $x:=\cos\theta$ where convenient, so $P_l(\cos\theta)=P_l(x)$.
+
+The contact pressure $p$, applied by the intervening air layer to both interfaces equally, is the sole coupling between the two spectral systems and the sole quantity this paper does not prescribe: it is determined, together with its instantaneous extent, by the kinematic-match closure of \S\ref{sec:contact}.
+
+\section{Bath interface model}
+\label{sec:bath}
+
+The bath is governed by the linearised, weakly viscous free-surface equations of \cite{AlventosaEtAl2023}, themselves following the quasi-potential formulation of \cite{DiasEtAl2008}. With velocity potential $\phi(r,z,\tau)$,
+\begin{equation}
+    \nabla_H^2\phi+\partial_z^2\phi=0\text{,}\quad z\le0\text{;}\qquad
+    \partial_\tau\eta = \partial_z\phi+2\Oh\nabla^2\eta\text{,}\quad z=0\text{;}
+    \label{eq:bath-pde-1}
+\end{equation}
+\begin{equation}
+    \partial_\tau\phi = -\Bo\,\eta - 2\Oh\,\partial_z^2\phi + \kappa[\eta] - p\text{,}\quad z=0\text{;}\qquad
+    \partial_z\phi=0\text{ at }z=-h_0\text{,}
+    \label{eq:bath-pde-2}
+\end{equation}
+where $\nabla_H^2=\partial_r^2+r^{-1}\partial_r$ is the horizontal Laplacian, $\kappa[\eta]=\nabla_H^2\eta$ the linearised curvature, and $h_0$ the nondimensional bath depth. The bath meets the container wall at $r=b$ under a no-flux condition, $\partial_r\eta=\partial_r\phi=0$ at $r=b$, giving a free ($90^\circ$) contact line there; \S\ref{sec:wall} develops an alternative wall condition, pinned rather than free, for the same governing equations.
+
+Expanding $\eta$ as in \eqref{eq:eta-xi} on the eigenfunctions of $(\nabla^2+k_m^2)J_0(k_mr)=0$ satisfying $J_0'(k_mb)=0$ -- equivalently $J_1(k_mb)=0$, so $k_mb$ runs over the zeros of $J_1$, together with the piston mode $k_0=0$ -- and eliminating $\phi$ between \eqref{eq:bath-pde-1} and \eqref{eq:bath-pde-2} mode by mode gives one damped linear oscillator per bath mode,
+\begin{equation}
+    \ddot a_m + 4\Oh k_m^2 \dot a_m + \left(k_m^2+\Bo\right)k_m\tanh(k_m h_0)\, a_m = -2 k_m \tanh(k_m h_0)\, c_m(\tau)\text{,}\qquad m=0,\dots,M\text{,}
+    \label{eq:bath-mode}
+\end{equation}
+where
+\begin{equation}
+    c_m(\tau) = \frac{2}{(bJ_0(k_mb))^2}\int_0^b p(r,\tau)\,r\,J_0(k_mr)\,dr
+    \label{eq:c_m-def}
+\end{equation}
+is the $m$-th Fourier--Bessel coefficient of the pressure, extended by zero outside the pressed region. The normaliser follows from the squared norm of the basis: since $J_1(k_mb)=0$,
+\begin{equation}
+    \int_0^bJ_0(k_mr)^2\,r\,dr = \frac{b^2}{2}\Big[J_0(k_mb)^2+J_1(k_mb)^2\Big] = \frac{b^2}{2}J_0(k_mb)^2\text{,}
+    \label{eq:bessel-norm}
+\end{equation}
+giving the weight $2/(bJ_0(k_mb))^2$ used in \eqref{eq:c_m-def}.
+
+\section{Wall condition: free versus pinned contact line}
+\label{sec:wall}
+
+A second container configuration is of physical interest alongside the free ($90^\circ$) contact line of \S\ref{sec:bath}: a rigid container in which the free surface is pinned at the triple point where it meets the wall, as a meniscus anchored on a machined rim behaves. The two configurations are not compatible with a single choice of basis, and it is worth deriving why, since the derivation determines which pinned formulations are admissible at all.
+
+Exact no-flux on a vertical wall requires $\partial_r\phi(b,z)=0$ for every $z\in[-h_0,0]$; differentiating in $z$ gives $\partial_r\partial_z\phi(b,0)=0$, and the kinematic condition \eqref{eq:bath-pde-1} then yields
+\begin{equation}
+    \partial_\tau\big[\partial_r\eta(b,\tau)\big] = \partial_r\partial_z\phi(b,0) + 2\Oh\,\partial_r\nabla^2\eta(b,\tau) = O(\Oh)\text{.}
+    \label{eq:wall-slope-frozen}
+\end{equation}
+In a rigid right-cylindrical container the wall slope of the free surface is therefore \emph{frozen}, to $O(\Oh)$, at whatever value it starts with. A configuration pinned at the rim with a wall slope free to vary in time is consequently not a solution of \eqref{eq:bath-pde-1}--\eqref{eq:bath-pde-2} under no-flux walls at all: it is over-determined. The admissible pinned configuration is the \emph{clamped edge}, $\eta(b)=0$ together with a frozen $\partial_r\eta(b)$; a constant nonzero wall slope is accommodated, if desired, by splitting $\eta=\eta_s(r)+\sum_ma_m(\tau)J_0(k_mr)$ with $\eta_s$ a static meniscus satisfying $\eta_s(b)=0$, $\eta_s'(b)\ne0$, and the dynamic part left on the no-flux (Neumann) basis of \S\ref{sec:bath}. Pinning, no-flux, and a nonzero wall slope are then all exact simultaneously. The pinned-edge eigenvalue problem in a rigid container is classical \citep{Scott1979,GrahamEagle1983}; a Robin condition $kJ_1(kb)=\lambda J_0(kb)$ \citep{Hocking1987} interpolates between the free and pinned limits as $\lambda$ runs from $0$ to $\infty$ and is not pursued here.
+
+We impose pinning on the Neumann basis of \S\ref{sec:bath} rather than by changing basis, for a reason that follows directly from \eqref{eq:bath-pde-1}: a mode $J_0(k_mr)$ displaces bath volume
+\begin{equation}
+    \int_0^bJ_0(k_mr)\,r\,dr = \frac{b}{k_m}J_1(k_mb) = 0\qquad\text{whenever }J_1(k_mb)=0\text{,}
+    \label{eq:volume-neutral}
+\end{equation}
+so every non-piston mode of the Neumann basis is volume-neutral, and the sole volume-carrying mode is the piston ($k_0=0$), whose pressure response vanishes identically (\S\ref{sec:affine}) and so can never be driven. Bath volume is conserved by construction on this basis, independent of truncation or resolution. A Dirichlet basis, $\{J_0(k_mr):J_0(k_mb)=0\}$, pins $\eta(b)=0$ as an identity of the basis itself, but loses this property entirely: none of its modes is volume-neutral, and nothing constrains the sum. Since the mechanism transferring displaced bath volume into radiated capillary waves is the model's entire physical content, we retain the volume-conserving Neumann basis and impose pinning as an added constraint instead.
+
+Pinning is the single scalar constraint $\mathcal C(a)=\sum_ma_mJ_0(k_mb)=0$, carried by a Lagrange multiplier $\Lambda$, which is physically the line force the rim exerts on the contact line. The multiplier enters as a line force $p_\Lambda=\Lambda\,\delta(r-b)$ at the domain's own boundary; its Fourier--Bessel coefficient under \eqref{eq:c_m-def} is $c_m^\Lambda=2\Lambda/(bJ_0(k_mb))$, taking $\int_0^bf(r)\delta(r-b)\,dr=f(b)$ -- a convention, since a delta sitting exactly at an endpoint admits no unique weight, but a harmless one, since any other choice only rescales $\Lambda$ itself. With the affine bath response \eqref{eq:kappa-m} of \S\ref{sec:affine}, the pinning constraint closes on
+\begin{equation}
+    a_m = \alpha_m + \kappa_mc_m + \frac{2}{b}\frac{\kappa_m\Lambda}{J_0(k_mb)}\text{,}\qquad
+    D = \frac{2}{b}\sum_m\kappa_m\text{,}\qquad
+    \Lambda = -\frac{\sum_m(\alpha_m+\kappa_mc_m)J_0(k_mb)}{D}\text{,}
+    \label{eq:route-b-multiplier}
+\end{equation}
+the last equality obtained by substituting the first into $\mathcal C(a)=0$; the $J_0(k_mb)$ factors cancel from $D$ entirely. Since $\kappa_m<0$ for every non-piston mode ($\kappa_0=0$ contributes nothing to the sum either way, by \S\ref{sec:affine}) and $\kappa_m\sim-2/k_m^2$ as $m\to\infty$, the sum defining $D$ is a convergent sum of same-signed terms and is nonzero for every admissible time step. Eliminating $\Lambda$ leaves $a_m$ affine in $c$ with a rank-one correction to the bath's response operator, so the nested closure of \S\ref{sec:contact} is unchanged in structure, at the cost of one additional $O(M)$ dot product per step; the multiplier is applied at every step, including free flight, since pinning constrains $a_m$ itself rather than arising only as a byproduct of contact pressure.
+
+Two properties of the correction matter beyond volume conservation. First, it is self-adjoint in the same weighted pairing $\langle\cdot,\cdot\rangle_w$, $w_m\propto J_0(k_mb)^2$, that the compliance operator of \S\ref{subsec:compliance} is built on: writing $-W\mathcal A_{\text{clamped}}=\mathrm{diag}(-\kappa_mJ_0(k_mb)^2)+(-2/bD)zz^\top$ with $z_m=\kappa_mJ_0(k_mb)$, both terms are positive semidefinite given only $\kappa_m\le0$ for every mode and $D<0$, and both facts hold for any admissible step, since the leading BDF2 coefficient $\mathfrak a=(1+2s)/(1+s)>0$ for every step ratio $s>0$ and $\Oh,\Bo\ge0$ in $\kappa_m$'s closed form \eqref{eq:kappa-m}. The rank-one correction therefore cannot push $-\mathcal A_{\text{clamped}}$ out of positive semidefiniteness at any step. Second, $J_0(k_mb)$ never vanishes on the Neumann basis -- since $J_0'=-J_1$, a common zero of $J_0$ and $J_1$ would force $J_0$ to vanish to second order there, which for a solution of Bessel's equation forces $J_0\equiv0$, a contradiction -- so \eqref{eq:route-b-multiplier} is well defined at every mode.
+
+Representing a profile pinned with a nonzero wall slope on the volume-conserving basis costs only a boundary layer of measure zero: expanding a target profile with $\eta(b)=0$, $\eta'(b)\ne0$ on the Neumann set, the relative $L^2$ truncation error falls as $M^{-3/2}$ and the slope is recovered pointwise at every $r<b$; only at $r=b$ itself does the truncated sum retain zero derivative, since every basis function does. Given \eqref{eq:wall-slope-frozen}, this is in any case not a cost paid against a genuine feature of the flow, since a rigid container under no-flux walls admits no time-varying wall slope to represent.
+
+The two wall conditions are not equally significant a priori. Because the bath's eigenvalues on either basis scale as $k_m\propto1/b$, the influence of the wall condition on the interior dynamics is set by how the shortest length scale it constrains -- the bath radius $b$ -- compares with the length scales the impact itself generates, principally the droplet radius and the contact patch. There is no basis, on dimensional grounds alone, for treating the wall condition as negligible once $b$ is only a few droplet radii; whether it is negligible at any particular $b$ is a question the model above is built to let one ask, not one this section prejudges.
+
+\section{Droplet interface model}
+\label{sec:drop}
+
+The droplet's small-amplitude oscillations about its spherical equilibrium follow, for a general contact pressure $p(\theta,\tau)$, from the energy balance $\dot T=\dot W-\varepsilon$, with $T$ the sum of the kinetic and surface energy associated with the decomposition \eqref{eq:eta-xi}, $\dot W$ the rate of working of $p$ on the surface, and $\varepsilon$ the viscous dissipation \citep{lamb1924hydrodynamics}. For $\xi=1+\sum_l\beta_lP_l(\cos\theta)$, the dimensional kinetic and surface energies of mode $l$ are $2\pi\rho R^3\dot A_l^2/(l(2l+1))$ and $2\pi\sigma(l-1)(l+2)A_l^2/(2l+1)$, with $A_l=R\beta_l$, and the dimensional rate of working of the pressure on that mode is $-2\pi R^2\dot A_lb_l$, with
+\begin{equation}
+    b_l(\tau) = \int_{-1}^1 p(x,\tau)\, P_l(x)\, dx
+    \label{eq:b_l-def}
+\end{equation}
+the (un-normalised) Legendre projection of the dimensional pressure. Substituting into $\dot T=\dot W-\varepsilon$ and using the orthogonality of the $P_l(\cos\theta)$ on $[-1,1]$ gives, mode by mode,
+\begin{equation}
+    \rho R^3\ddot A_l + 2\mu R(2l+1)(l-1)\,\dot A_l + \sigma l(l-1)(l+2)\,A_l = -\tfrac12R^2l(2l+1)\,b_l(\tau)\text{,}
+    \label{eq:drop-mode-dim}
+\end{equation}
+with $\mu=\rho\nu$ the dynamic viscosity and the damping coefficient the classical result of \cite{lamb1924hydrodynamics} for a viscous drop's free oscillations. Nondimensionalising with $A_l=R\beta_l$, $t=t_\sigma\tau$, and the pressure scale $2\sigma/R$ of \eqref{eq:nondim} -- so that $b_l$ in \eqref{eq:b_l-def} is understood as the projection of the nondimensional pressure $p$, related to the dimensional projection above by that same factor -- collapses \eqref{eq:drop-mode-dim} to
+\begin{equation}
+    \ddot\beta_l + 2\Oh(2l+1)(l-1)\, \dot\beta_l + l(l-1)(l+2)\, \beta_l = -(2l+1)l\, b_l(\tau)\text{,}\qquad l=2,\dots,L\text{.}
+    \label{eq:drop-mode}
+\end{equation}
+The mode $l=1$, excluded from \eqref{eq:eta-xi} because it is a rigid translation rather than a deformation, is instead governed by the motion of the centre of mass itself,
+\begin{equation}
+    \dot z_{cm} = v\text{,}\qquad \dot v = \tfrac32 f(\tau) - \Bo\text{,}\qquad f(\tau) = 2\int_0^{r_c(\tau)} p(r,\tau)\, r\, dr\text{,}
+    \label{eq:com}
+\end{equation}
+with $r_c(\tau)$ the instantaneous contact radius and $f$ the net contact force, determined together with the pressure by the closure of \S\ref{sec:contact}.
+
+\section{Time discretisation: affine response to pressure}
+\label{sec:affine}
+
+Equations \eqref{eq:bath-mode}, \eqref{eq:drop-mode} and the pair \eqref{eq:com} are each, mode by mode, of the common form
+\begin{equation}
+    \ddot x + 2\gamma\dot x+\omega^2x = Fu(\tau)\text{,}
+    \label{eq:generic-ode}
+\end{equation}
+with $x$ one of $a_m,\beta_l,z_{cm}$, $u$ the corresponding pressure moment $c_m,b_l,f$, and $(\gamma,\omega^2,F)$ read off from \eqref{eq:bath-mode}, \eqref{eq:drop-mode}, \eqref{eq:com} respectively:
+\begin{equation}
+    (\gamma,\omega^2,F)_{\text{bath}} = \Big(2\Oh k_m^2,\ (k_m^2+\Bo)k_m\tanh(k_mh_0),\ -2k_m\tanh(k_mh_0)\Big)\text{,}
+    \label{eq:bath-coeffs}
+\end{equation}
+\begin{equation}
+    (\gamma,\omega^2,F)_{\text{drop}} = \Big(\Oh(2l+1)(l-1),\ l(l-1)(l+2),\ -(2l+1)l\Big)\text{,}\qquad
+    (\gamma,\omega^2,F)_{cm} = \left(0,\ 0,\ \tfrac32\right)\text{.}
+    \label{eq:drop-com-coeffs}
+\end{equation}
+We discretise \eqref{eq:generic-ode} in time with a variable-step, second-order backward differentiation formula (BDF2). With $s^k=\delta_t^k/\delta_t^{k-1}$,
+\begin{equation}
+    \mathfrak a^k=\frac{1+2s^k}{1+s^k}\text{,}\qquad b^k=-(1+s^k)\text{,}\qquad c^k=\frac{(s^k)^2}{1+s^k}\text{,}
+\end{equation}
+and $\dot f^{k+1}\approx(\mathfrak a^kf^{k+1}+b^kf^k+c^kf^{k-1})/\delta_t^k$ for any variable $f$, the first-order system $(x,y{=}\dot x)$ becomes
+\begin{equation}
+    \mathfrak a x^{k+1}+bx^k+cx^{k-1} = \delta\, y^{k+1}\text{,}\qquad
+    \mathfrak a y^{k+1}+by^k+cy^{k-1} = \delta\left(-2\gamma y^{k+1}-\omega^2x^{k+1}+Fu^{k+1}\right)\text{,}
+    \label{eq:bdf2}
+\end{equation}
+with $\delta:=\delta_t^k$ and the step superscript on $\mathfrak a,b,c$ dropped for brevity. Eliminating $y^{k+1}$ between the two equations of \eqref{eq:bdf2} and collecting every term proportional to $x^{k+1}$ gives
+\begin{equation}
+    x^{k+1} = (\text{known history}) + \kappa\,u^{k+1}\text{,}\qquad
+    \kappa = \frac{\delta^2 F}{\mathfrak a^2+2\gamma\mathfrak a\delta+\delta^2\omega^2}\text{.}
+    \label{eq:kappa-general}
+\end{equation}
+Every state variable is therefore, at the current time level, an \emph{affine} function of its own pressure moment, with a slope $\kappa,\lambda,\kappa_{cm}$ fixed once the step size $\delta$ and history are known:
+\begin{equation}
+    a_m^{k+1} = \alpha_m^{k+1} + \kappa_m\, c_m^{k+1}\text{,}\qquad
+    \kappa_m = \frac{-2\delta^2 k_m\tanh(k_mh_0)}{\mathfrak a\big(\mathfrak a+4\delta\Oh k_m^2\big)+\delta^2(k_m^2+\Bo)k_m\tanh(k_mh_0)}\text{,}
+    \label{eq:kappa-m}
+\end{equation}
+\begin{equation}
+    \beta_l^{k+1} = \gamma_l^{k+1} + \lambda_l\, b_l^{k+1}\text{,}\qquad
+    \lambda_l = \frac{-\delta^2(2l+1)l}{\mathfrak a\big(\mathfrak a+2\delta\Oh(2l+1)(l-1)\big)+\delta^2l(l-1)(l+2)}\text{,}
+    \label{eq:lambda-l}
+\end{equation}
+\begin{equation}
+    z_{cm}^{k+1} = \mu^{k+1}+\kappa_{cm}\,f^{k+1}\text{,}\qquad \kappa_{cm}=\frac{3\delta^2}{2\mathfrak a^2}\text{,}
+    \label{eq:kappa-cm}
+\end{equation}
+with $\alpha_m^{k+1},\gamma_l^{k+1},\mu^{k+1}$ depending only on $\delta,\mathfrak a,b,c$ and the two preceding time levels. This affine structure is what reduces the contact problem at each time step to a purely algebraic one, developed next.
+
+\section{Contact closure}
+\label{sec:contact}
+
+We determine the pressure and the contact angle $\theta_c(\tau)$ so that the bath and droplet surfaces coincide throughout $[0,\theta_c(\tau)]$ and do not overlap beyond it, with neither the extent of contact nor the shape of the pressure prescribed in advance.
+
+\subsection{Pressure representation}
+\label{subsec:pressure-representation}
+
+The contact pressure is represented as a polynomial of degree $N$ in $x=\cos\theta$, exactly zero outside the instantaneous contact patch. Writing $\psi(x,\tau):=(x-x_c(\tau))/(1-x_c(\tau))\in[0,1]$ for the pressure's own rescaled coordinate on the patch, we use the shifted Legendre polynomials $\tilde P_n(\psi):=P_n(2\psi-1)$ rather than monomials $\psi^n$: the latter have a self-overlap (Gram) matrix $\int_0^1\psi^n\psi^m\,d\psi=1/(n+m+1)$, the classical Hilbert matrix, whose condition number already exceeds $10^4$ at $N=3$ independent of $x_c$, whereas $\tilde P_n$ is exactly orthogonal under the same plain-$L^2$ inner product used throughout this closure, giving a diagonal self-Gram matrix of condition number $2N+1$ at every $N$ and $x_c$. Each $\tilde P_n(\psi(x,\tau))$ is, for every $n$, exactly a degree-$n$ polynomial in $x$ -- an affine change of variable composed with a degree-$n$ polynomial -- so this basis has exactly the same total polynomial degree $N$ as the monomial basis it replaces. The pressure is then
+\begin{equation}
+    p(x,\tau) = \sum_{n=0}^{N} \hat c_n(\tau)\, \tilde P_n\big(\psi(x,\tau)\big)\text{,}\quad x\ge x_c(\tau)\text{;}\qquad
+    p(x,\tau) \equiv 0\text{,}\quad x<x_c(\tau)\text{,}\qquad x_c(\tau):=\cos\theta_c(\tau)\text{,}
+    \label{eq:pressure-poly}
+\end{equation}
+with $x_c(\tau)$ held fixed as a parameter, rather than carried as an additional unknown, throughout each solve for $\hat c$ (\S\ref{subsec:contact-angle}); the vanishing of $p$ outside contact then costs no additional equations and is exact rather than approximate.
+
+\subsection{Full contact and the inner Galerkin conditions}
+\label{subsec:full-contact}
+
+Contact over the entire pressed region requires
+\begin{equation}
+    \eta\big(r(\theta,\tau),\tau\big) = z_{cm}(\tau) - z_d(\theta,\tau)\text{,}\qquad 0\le\theta\le\theta_c(\tau)\text{,}
+    \label{eq:full-contact}
+\end{equation}
+with $\eta$, $z_{cm}$, $z_d$ each affine in the pressure moments $c_m$, $f$, $b_l$ by \eqref{eq:kappa-m}--\eqref{eq:kappa-cm}. The $N+1$ coefficients $\hat c_n(\tau)$ cannot satisfy \eqref{eq:full-contact} at every point of $[0,\theta_c(\tau)]$; we impose it in the weighted-residual sense obtained by projecting the mismatch onto the same $N+1$ polynomials that represent the pressure,
+\begin{equation}
+    \int_{x_c}^1 \Big[\eta\big(r(\theta,\tau),\tau\big) - z_{cm}(\tau) + z_d(\theta,\tau)\Big]\,\tilde P_n\big(\psi(x,\tau)\big)\, w(x,\tau)\, dx = 0\text{,}\qquad n=0,\dots,N\text{,}
+    \label{eq:galerkin}
+\end{equation}
+$N+1$ equations for the $N+1$ unknowns $\hat c_n$, with $w(x):=-\tfrac12\,d[r^2]/dx$ the weight supplying the cylindrical area element $r\,dr=w\,dx$ (\S\ref{subsec:compliance}). By \eqref{eq:lambda-l}, $\beta_l(\tau)$ is an explicit function of $\hat c_n(\tau)$ through $b_l(\tau)=\int_{x_c}^1p(x,\tau)\,x\,P_l(x)\,w(x,\tau)\,dx$ (\S\ref{subsec:compliance}), which enters $\xi$, hence $r(\theta,\tau)$, hence $J_0\big(k_mr(\theta,\tau)\big)$ inside $\eta$; this composition is what makes \eqref{eq:galerkin} genuinely, though only mildly, nonlinear in $\hat c_n(\tau)$.
+
+\subsection{Evaluating the projections}
+\label{subsec:projections}
+
+The centre-of-mass and droplet-surface contributions to \eqref{eq:com}, \eqref{eq:b_l-def} and \eqref{eq:galerkin} involve only $\xi$ and $p$, hence only polynomials in $x$ of known, finite degree, and are therefore evaluated exactly by $n_q$-point Gauss--Legendre quadrature once $n_q$ exceeds half that degree. The droplet contribution to \eqref{eq:galerkin} has integrand degree $N+L+1$; the centre-of-mass integral, written as $f(\tau)=-\int_{x_c}^1p(x,\tau)\,d[r(x,\tau)^2]$ since $r(x,\tau)^2=\xi(x,\tau)^2(1-x^2)$ is itself polynomial in $x$, has integrand degree $N+2L+1$.
+
+The bath-side projection $c_m$ of \eqref{eq:c_m-def} and the bath contribution to \eqref{eq:galerkin} both involve $J_0\big(k_mr(x,\tau)\big)$, and $J_0$ composed with the non-polynomial map $r(x,\tau)=\xi(\arccos x,\tau)\sqrt{1-x^2}$ admits no elementary antiderivative. These are evaluated by the same $n_q$-point quadrature rule, applied numerically rather than exactly:
+\begin{equation}
+    c_m(\tau) = \frac{2}{(bJ_0(k_mb))^2}\int_{x_c}^1 p(x,\tau)\, J_0\!\big(k_mr(x,\tau)\big)\, r(x,\tau)\,\Big|\frac{dr}{dx}\Big|\, dx\text{,}\qquad
+    W_n^{(m)}(\tau) := \int_{x_c}^1 J_0\!\big(k_mr(x,\tau)\big)\,\tilde P_n\big(\psi(x,\tau)\big)\, w(x,\tau)\,dx\text{,}
+    \label{eq:c_m-Wn}
+\end{equation}
+with the bath contribution to \eqref{eq:galerkin} equal to $\sum_m a_m(\tau)\,W_n^{(m)}(\tau)$. No root-finding enters either evaluation: $r(x,\tau)$ is a forward evaluation of \eqref{eq:forward-map} at each quadrature abscissa, and no unknown of the problem is attached to an abscissa.
+
+\subsection{The compliance operator}
+\label{subsec:compliance}
+
+Collecting the pressure-dependent part of the contact mismatch into a single linear map exposes what the closure inverts and how well conditioned that inversion is. By \eqref{eq:kappa-m}--\eqref{eq:kappa-cm}, each of $\eta,z_{cm},z_d$ responds affinely to the pressure moments, and by \eqref{eq:c_m-def}, \eqref{eq:b_l-def} and \eqref{eq:com} each moment is a linear functional of $p$; composing, at frozen geometry,
+\begin{equation}
+    C(x,\tau) = C_{\text{free}}(x,\tau) + \big(\mathcal A p\big)(x,\tau)\text{,}\qquad
+    \big(\mathcal A p\big)(x) = \int_{x_c}^1 \mathcal K(x,x')\,p(x')\,dx'\text{,}
+    \label{eq:compliance-def}
+\end{equation}
+with $C_{\text{free}}$ the mismatch the BDF2 history alone would produce and the kernel
+\begin{equation}
+    \mathcal K = \underbrace{\sum_{m}\kappa_m\tfrac{2}{(bJ_0(k_mb))^2}J_0\big(k_mr(x)\big)J_0\big(k_mr(x')\big)\,w(x')}_{\text{bath}}
+    \;\underbrace{-\,2\kappa_{cm}\,w(x')}_{\text{centre of mass}}
+    \;+\;\underbrace{\sum_l\lambda_l\,x\,P_l(x)P_l(x')}_{\text{droplet}}\text{.}
+    \label{eq:compliance-kernel}
+\end{equation}
+$\mathcal A$ is the \emph{compliance operator} of the contact problem: it maps a trial pressure to the gap displacement that pressure induces.
+
+$\mathcal A$ is self-adjoint under the pairing $\langle u,v\rangle_w=\int uv\,w\,dx$, for the following reason. Self-adjointness with respect to $\langle u,v\rangle_\mu$ requires $\mu(x)\mathcal K(x,x')=\mu(x')\mathcal K(x',x)$. The bath and centre-of-mass terms carry their entire $x'$-dependence in the factor $w(x')$, so they satisfy this for $\mu\propto w$; the droplet term is made to as well by pairing the droplet's Legendre projection against the same measure and the same displacement component the contact condition itself uses,
+\begin{equation}
+    b_l(\tau) \;=\; \int_{x_c}^1 p(x,\tau)\,x\,P_l(x)\,w(x,\tau)\,dx\text{,}
+    \label{eq:b_l-selfadjoint}
+\end{equation}
+in place of the plain spherical projection \eqref{eq:b_l-def}. This is a linearisation choice, not a physical one: it differs from \eqref{eq:b_l-def} only at $O(\theta_c^2)$, since the pressure acts along the true surface normal, which is neither exactly radial nor exactly vertical, and it reduces to \eqref{eq:b_l-def} exactly as $\theta_c\to0$, where $x\to1$ and $w\to1$. With \eqref{eq:b_l-selfadjoint} in force, and with the contact conditions \eqref{eq:galerkin} tested against the same basis that represents the pressure and in the same measure $w\,dx$, the inner Galerkin matrix $\langle\tilde P_n,\mathcal A\tilde P_{n'}\rangle_w$ is symmetric.
+
+The symmetric part of $\mathcal A$ is negative semidefinite rather than definite: it possesses a nontrivial nullspace, so it gives uniqueness of the gap response $\mathcal A p$ but not of $p$ itself. This is consistent with $\mathcal A$ being a compact operator -- an integral operator with a smooth kernel, hence with singular values accumulating at zero -- and it follows that the pointwise pressure is not a quantity this closure resolves at any finite $M,N$: only its low-order moments $c_m,b_l,f$ enter the governing equations \eqref{eq:bath-mode}, \eqref{eq:drop-mode}, \eqref{eq:com}, and only they need be resolved. The resolvable dimension of the pressure -- the number of directions in $\hat c$-space to which the assembled discrete operator responds above numerical roundoff -- depends on both the bath and droplet truncations and on the instantaneous contact angle; we measure it from the assembled operator's singular values at each step rather than predict it from a formula, since it varies through an impact as the patch grows.
+
+\subsection{The contact angle: an outer selector}
+\label{subsec:contact-angle}
+
+The remaining unknown is $\theta_c(\tau)$. Write
+\begin{equation}
+    C(\theta,\tau) := \eta\big(r(\theta,\tau),\tau\big)-z_{cm}(\tau)+z_d(\theta,\tau)
+    \label{eq:pointwise-residual}
+\end{equation}
+for the pointwise contact mismatch, required by \eqref{eq:full-contact} to vanish for $0\le\theta\le\theta_c(\tau)$ and, by \eqref{eq:check-nonintersect} below, to remain negative beyond it. The classical closing condition for a free boundary of this kind is tangency, $\partial_\theta C(\theta_c,\tau)=0$, smooth pasting between the pressed and unpressed regions. By \eqref{eq:eta-xi}, $\xi(\theta,\tau)$ is even in $\theta$ for every $\theta$ (it depends on $\theta$ only through $\cos\theta$); $r(\theta,\tau)=\xi\sin\theta$ is therefore odd, $\eta(r(\theta,\tau),\tau)$ is even (an even function of an odd argument, composed through $J_0$), and $z_d(\theta,\tau)=\xi\cos\theta$ is even. Hence $C(\theta,\tau)$ is even in $\theta$ for every state, its derivative is odd and $2\pi$-periodic, and
+\begin{equation}
+    \partial_\theta C(0,\tau)\equiv0\text{,}\qquad \partial_\theta C(\pi,\tau)\equiv0
+    \label{eq:tangency-degenerate}
+\end{equation}
+identically, for any state whatsoever. Tangency therefore carries no information at the poles: at $\theta_c=0$ the contact patch has shrunk to a point, and tangency cannot constrain an extent that does not exist. The same degeneracy holds in the discrete tangency condition of \cite{AgueroEtAl2026}, for the same reason (axisymmetry forces $\partial_r\eta(0,t)=\partial_rz_d(0,t)=0$ identically), and their treatment is the one adopted here: rather than solving $\partial_\theta C=0$ from a free seed, they evaluate its residual at a discrete set of candidate contact extents bracketing the previous step's, discard those violating non-intersection, and select the surviving candidate that minimises the residual. Tangency is used throughout as a \emph{selector} over candidates, never as an equation solved from an unconstrained starting point.
+
+With $\theta_c$ an outer scalar parameter rather than an unknown carried alongside the pressure, $x_c=\cos\theta_c$ is fixed for each trial value, and \eqref{eq:galerkin} is a square system of $N+1$ equations for the $N+1$ coefficients $\hat c_n$ alone (\S\ref{subsec:newton}); solving it yields a pressure and, through \eqref{eq:summary-states}, a complete state, hence a scalar residual in $\theta_c$ with the pressure already eliminated, reducing the outer problem to one dimension. Two conditions fix $\theta_c$ once the pressure is eliminated. The first is tangency in its selector role,
+\begin{equation}
+    T(\theta_c,\tau) := \partial_\theta C(\theta,\tau)\big|_{\theta=\theta_c}\text{,}\qquad\text{sought }=0\text{,}
+    \label{eq:tangency-selector}
+\end{equation}
+evaluated at the state the pressure solving \eqref{eq:galerkin} induces at that $\theta_c$. The second is non-intersection, \eqref{eq:check-nonintersect} below, imposed as a feasibility filter on candidate $\theta_c$ exactly as in \cite{AgueroEtAl2026}: a trial value for which $C(\theta,\tau)\ge0$ for some $\theta>\theta_c$ is discarded before $T$ is consulted. The accepted value at each step is
+\begin{equation}
+    \theta_c^{k+1} \;=\; \operatorname*{arg\,min}_{\theta\in\Theta^{k+1}}\big|T(\theta,\tau^{k+1})\big|\text{,}
+    \label{eq:theta-c-argmin}
+\end{equation}
+with $\Theta^{k+1}$ the set of admissible candidates bracketing the previous step's converged $\theta_c^k$, subject to a continuity bound $|\theta_c^{k+1}-\theta_c^k|$ below a threshold below which the time step is instead reduced and the step retried -- the direct analogue of the contact-radius continuity bound of \cite{AgueroEtAl2026}. The argmin form, rather than a bisection on a sign change, is required because $\eta(r(\theta,\tau),\tau)$ is a sum of oscillatory $J_0$ terms once $k_mr$ is not small, so $T(\cdot,\tau)$ can change sign more than once on $(0,\pi)$; the argmin needs no sign change and so is not defeated by this non-monotonicity. Existence of at least one admissible $\theta_c$ for a state genuinely in contact follows from the intermediate value theorem applied to $C$: $C(0,\tau)>0$ is the geometric onset-of-contact condition, and $C(\theta,\tau)$ must become negative before $\theta=\pi$, since a positive $C$ throughout would mean the surfaces overlap everywhere.
+
+An integrated, rather than pointwise, selector is not used, for a reason established by trying the alternative: a selector minimising a weak residual over the whole patch is biased toward vanishing contact, since shrinking the patch shrinks the domain the residual is measured over, reproducing the degeneracy at onset rather than curing it.
+
+At the first contact step, $\theta_c^k=0$ and \eqref{eq:tangency-degenerate} makes $T\equiv0$ in a neighbourhood of $\theta_c=0$, so the bracket cannot be centred on a previous value. We instead seed the first contact step from the geometric crossing $C(\theta_c,\tau)=0$, which is non-degenerate at onset by the existence argument above, and hand over to \eqref{eq:theta-c-argmin} from the second contact step on.
+
+Removing $\theta_c$ from the linear system, rather than solving for it jointly with $\hat c$, is what keeps the closure well conditioned. Every column of the pressure block in a joint system carries a factor of $\kappa_m$, $\kappa_{cm}$ or $\lambda_l$, each $O(\delta^2)$ by \eqref{eq:kappa-general}; a $\theta_c$ column does not, since $\theta_c$ is a raw coordinate that never flows through the BDF2 relations \eqref{eq:kappa-m}--\eqref{eq:kappa-cm}. A joint system therefore mixes columns differing by $O(\delta^2)$ in scale, and its condition number grows without bound as $\delta\to0$. The inner system of the nesting above contains no such column: its condition number is measured at order unity and flat in $\delta$ (see supplementary material), against order $10^{18}$ for the joint alternative at the same state -- a gain obtained by removing one row from the linear system, not by adding machinery.
+
+\subsection{Admissibility}
+\label{subsec:admissibility}
+
+Two conditions are structural in the closure above. Non-intersection of the two surfaces beyond the contact edge,
+\begin{equation}
+    \eta\big(r(\theta,\tau),\tau\big) < z_{cm}(\tau)-z_d(\theta,\tau)\text{,}\qquad \theta\in(\theta_c(\tau),\pi]\text{,}
+    \label{eq:check-nonintersect}
+\end{equation}
+is the feasibility filter of \S\ref{subsec:contact-angle}. Every substitution of $r\,dr=w\,dx$ in \eqref{eq:c_m-Wn} and \eqref{eq:compliance-kernel} requires the map $x\mapsto r(x,\tau)$ to be injective on the patch, equivalently
+\begin{equation}
+    \frac{\partial r}{\partial x}(x,\tau) < 0\text{,}\qquad x\in[x_c(\tau),1]\text{,}
+    \label{eq:check-monotone-r}
+\end{equation}
+without which $w=-\tfrac12d[r^2]/dx$ need not equal $r|dr/dx|$ and can change sign. For an undeformed droplet, $r=\sqrt{1-x^2}$ and \eqref{eq:check-monotone-r} holds throughout; for a deformed one it fails once the patch reaches the droplet's widest point, the same bound $r_c(\tau)<r_M(\tau)$ introduced by \cite{AgueroEtAl2026} to the same end, and it is tested on each candidate $\theta_c$ alongside \eqref{eq:check-nonintersect}.
+
+Positivity of the pressure on the pressed region is neither imposed nor, once $\mathcal A$'s resolvable dimension (\S\ref{subsec:compliance}) is exceeded, a meaningful test of the solution, since the pointwise pressure is then dominated by directions the closure does not resolve. It is not imposed for the further reason that neither parent model imposes it: \cite{AlventosaEtAl2023} monitor only $\mathrm{sign}\,f$, and \cite{AgueroEtAl2026}'s constraint set contains no pointwise positivity condition.
+
+\section{Solution procedure}
+\label{subsec:newton}
+
+The contact problem at time level $\tau^{k+1}$ is solved as a one-dimensional outer iteration over $\theta_c^{k+1}$ wrapping an inner solve for the pressure coefficients $\hat c=(\hat c_0^{k+1},\dots,\hat c_N^{k+1})\in\mathbb R^{N+1}$, with $\theta_c^{k+1}$ held fixed at its current trial value throughout. Every other quantity is an explicit function of $\hat c$, evaluated in the order: $p(x;\hat c)$ from \eqref{eq:pressure-poly}; $b_l(\hat c)$ from \eqref{eq:b_l-selfadjoint}; $\beta_l(\hat c)$ from \eqref{eq:lambda-l}; the geometry $\xi,r,z_d$ from \eqref{eq:eta-xi}--\eqref{eq:forward-map}; $c_m(\hat c)$ and $W_n^{(m)}(\hat c)$ from \eqref{eq:c_m-Wn}; $a_m(\hat c)$ from \eqref{eq:kappa-m}; and $f(\hat c)$, $z_{cm}(\hat c)$ from \eqref{eq:com}, \eqref{eq:kappa-cm}. No step in this chain depends on a quantity not yet evaluated. The inner residual $R_n(\hat c)$ is the left-hand side of \eqref{eq:galerkin} evaluated along this chain, and $\hat c$ is found by Newton's method,
+\begin{equation}
+    \hat c^{(j+1)} = \hat c^{(j)} - J\big(\hat c^{(j)}\big)^{-1}R\big(\hat c^{(j)}\big)\text{,}\qquad J:=\frac{\partial R}{\partial\hat c}\text{.}
+    \label{eq:newton-step}
+\end{equation}
+The system is nonlinear only through the $\beta_l(\hat c)$-dependence of the geometry: non-polynomially, inside $J_0(k_mr)$, and quadratically through $r^2=\xi^2(1-x^2)$, both channels suppressed at $O(\delta^2)$ by \eqref{eq:lambda-l}. Because every step of the evaluation chain -- polynomial evaluation, Gauss--Legendre quadrature, and $J_0,J_1$ with their derivative recurrences $J_0'=-J_1$, $J_1'=J_0-J_1/x$ -- is an elementary or special-function composition and none is a linear solve, an implicit root, or a search, $R$ is differentiable by direct automatic differentiation of the same computation that evaluates it, at a cost of $N+1$ forward-mode passes.
+
+The linear solve in \eqref{eq:newton-step} is performed as a spectral-filtered solve: a truncated singular value decomposition of $J$ at a fixed relative cutoff, discarding directions below it. This is the standard treatment of a compact operator's ill-posed inversion (\S\ref{subsec:compliance}): the discarded directions are those in which the pressure does not measurably affect the gap, and the retained count adapts, at negligible cost relative to a time step, to the resolvable dimension measured at each state. The outer iteration is then a one-dimensional search for $\theta_c^{k+1}$: bracket around $\theta_c^k$ subject to the continuity bound, discard trial values violating \eqref{eq:check-nonintersect}, and evaluate \eqref{eq:theta-c-argmin} among the survivors, reducing $\delta$ and retrying the step if no admissible bracket exists. Each outer evaluation costs one inner Newton solve.
+
+\section{Model summary}
+\label{sec:summary}
+
+The complete system solved at every time level $\tau^{k+1}$ consists of the $N+1$ equations \eqref{eq:summary-galerkin} for $\hat c^{k+1}$ at fixed $\theta_c^{k+1}$, wrapped in the scalar selection \eqref{eq:summary-theta-c} for $\theta_c^{k+1}$ itself, together with the states, geometry and pressure moments that are explicit functions of $\hat c^{k+1}$ alone (\S\ref{subsec:newton}).
+
+\emph{States}, advanced from \eqref{eq:kappa-m}--\eqref{eq:kappa-cm} given the pressure moments at $\tau^{k+1}$:
+\begin{equation}
+    a_m^{k+1}=\alpha_m^{k+1}+\kappa_mc_m^{k+1}\ (m=0,\dots,M)\text{,}\quad
+    \beta_l^{k+1}=\gamma_l^{k+1}+\lambda_lb_l^{k+1}\ (l=2,\dots,L)\text{,}\quad
+    z_{cm}^{k+1}=\mu^{k+1}+\kappa_{cm}f^{k+1}\text{.}
+    \label{eq:summary-states}
+\end{equation}
+For a pinned wall (\S\ref{sec:wall}), $a_m^{k+1}$ is additionally corrected by \eqref{eq:route-b-multiplier}.
+
+\emph{Geometry}, given the state:
+\begin{equation}
+    r(\theta,\tau^{k+1})=\xi(\theta,\tau^{k+1})\sin\theta\text{,}\qquad z_d(\theta,\tau^{k+1})=\xi(\theta,\tau^{k+1})\cos\theta\text{,}\qquad
+    \xi=1+\textstyle\sum_l\beta_l^{k+1}P_l(\cos\theta)\text{.}
+    \label{eq:summary-geometry}
+\end{equation}
+
+\emph{Pressure}, the inner unknowns, at the current trial contact angle:
+\begin{equation}
+    p(x,\tau^{k+1})=\sum_{n=0}^N\hat c_n^{k+1}\,\tilde P_n\big(\psi(x,\tau^{k+1})\big)\ (x\ge x_c^{k+1})\text{,}\qquad p\equiv0\ (x<x_c^{k+1})\text{,}\qquad x_c^{k+1}=\cos\theta_c^{k+1}\text{.}
+    \label{eq:summary-pressure}
+\end{equation}
+
+\emph{Pressure moments} feeding \eqref{eq:summary-states}, computed from \eqref{eq:summary-pressure} via \eqref{eq:b_l-selfadjoint} and \eqref{eq:c_m-Wn}, all by quadrature:
+\begin{equation}
+    c_m^{k+1}=\tfrac{2}{(bJ_0(k_mb))^2}\!\int_{x_c^{k+1}}^1\! p\,J_0(k_mr)\,r\Big|\tfrac{dr}{dx}\Big|dx\text{,}\quad
+    b_l^{k+1}=\!\int_{x_c^{k+1}}^1\! p\,x\,P_l(x)\,w\,dx\text{,}\quad
+    f^{k+1}=-\!\int_{x_c^{k+1}}^1\! p\,d\big[r^2\big]\text{.}
+    \label{eq:summary-moments}
+\end{equation}
+
+\emph{Inner closure}, $N+1$ equations for the $N+1$ unknowns $\hat c_0^{k+1},\dots,\hat c_N^{k+1}$ at fixed $\theta_c^{k+1}$:
+\begin{equation}
+    \int_{x_c^{k+1}}^1\Big[\eta\big(r(\theta,\tau^{k+1}),\tau^{k+1}\big)-z_{cm}^{k+1}+z_d(\theta,\tau^{k+1})\Big]\,\tilde P_n\big(\psi(x,\tau^{k+1})\big)\,w\,dx=0\text{,}\quad n=0,\dots,N\text{,}
+    \label{eq:summary-galerkin}
+\end{equation}
+
+\emph{Outer closure}, selecting $\theta_c^{k+1}$ among candidates admissible under \eqref{eq:check-nonintersect}, \eqref{eq:check-monotone-r} and the continuity bound of \S\ref{subsec:contact-angle}:
+\begin{equation}
+    \theta_c^{k+1}=\operatorname*{arg\,min}_{\theta\in\Theta^{k+1}}\big|\partial_\theta C(\theta,\tau^{k+1})\big|\text{,}\qquad
+    C(\theta,\tau) = \eta\big(r(\theta,\tau),\tau\big)-z_{cm}(\tau)+z_d(\theta,\tau)\text{.}
+    \label{eq:summary-theta-c}
+\end{equation}
+
+The pressure and the contact extent are both solved for, at different levels rather than jointly, which keeps the inner system's conditioning independent of the time step and of order unity: $\eta$, $\xi$ and $p$ remain finite spectral sums throughout, the forward map \eqref{eq:forward-map} is used only forward, $p\equiv0$ off the contact patch holds exactly, and the resolvable pressure order is measured from the assembled compliance operator at each step rather than chosen or predicted in advance.
