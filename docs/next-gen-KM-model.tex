@@ -442,11 +442,16 @@ of restitution deliberately: the latter settles far earlier than anything else a
 have reported convergence at mode counts where the contact time is still wrong by a factor
 of two ($M=L=30$ gives $2.15$ against the converged $4.26$).
 
-A separate practical limitation, recorded because it bounds what can currently be
-validated: at low Weber number the scheme becomes pathologically slow, with a
-$\We\approx0.012$ run failing to complete in many times the wall-clock of a $\We\approx1$
-run. The cause is not diagnosed here, and it prevents a sweep across the full published
-$\We$ range for the time being.
+Two practical limitations are recorded because they bound what can currently be validated.
+The cost per step is not uniform in $\We$, and not monotone in it either: timed at
+$M=L=60$, the wall clock is $48,\,27,\,555,\,23,\,24$ seconds at
+$\We=0.0121,\,0.0646,\,0.3,\,1.0958,\,3.0$, so $\We\approx0.3$ costs some twenty times more
+per step ($597$ ms against $31$--$36$ ms) than either of its neighbours. This is a
+localised defect rather than a trend --- most plausibly the feasibility band search
+failing to bracket efficiently at that particular state --- and it is not diagnosed here.
+Separately, the $\We=0.0121$ run does not terminate contact within the integration window
+$\tau_{\text{end}}=14$, so its reported contact time is truncated rather than measured.
+Both prevent a clean sweep across the full published $\We$ range for the time being.
 
 The implementation exercises exactly the structure derived above, and two of its details
 were forced by measurement rather than chosen. First, reducing the time step does

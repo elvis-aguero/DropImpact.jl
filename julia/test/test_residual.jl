@@ -32,18 +32,34 @@
             Xm = copy(chat0); Xm[j] -= h
             Jfd[:, j] = (R(Xp) .- R(Xm)) ./ (2h)
         end
-        @test Jad ≈ Jfd rtol = 1e-4 atol = 1e-12
+        # NORM-relative, not entrywise: the affine slopes are O(dt^2), so at dt = 1e-3 the
+        # Jacobian entries span 1e-8 down to 1e-13 and the smallest of them are pure
+        # finite-difference noise (they disagree in SIGN between the two methods while both
+        # are ~1e-13). An entrywise atol tight enough to be meaningful for the leading entry
+        # is meaningless for the trailing one; comparing norms tests the same thing without
+        # asserting anything about numerical dust.
+        @test norm(Jad - Jfd) / norm(Jad) < 1e-4
     end
 
-    @testset "Galerkin matrix is symmetric (self-adjoint pairing, same-basis w-measure test)" begin
+    @testset "Galerkin matrix is dominated by its symmetric part" begin
         # Design doc §subsubsec:compliance: with b_l carrying BOTH the vertical factor x
         # and the area weight w, and with the test functions equal to the trial basis in
-        # the w measure, the frozen-geometry Galerkin matrix is symmetric. That property is
-        # what gives the per-step problem an energy functional, and it is destroyed by
-        # changing either ingredient -- so it is worth guarding.
+        # the w measure, the compliance Galerkin matrix is self-adjoint -- verified to
+        # 1e-16 in derivations/probe_global_basis_argmin.jl.
+        #
+        # That verification is at FROZEN GEOMETRY, which is what the compliance operator is
+        # defined at. The full Jacobian of `residual` is not the same object: beta responds
+        # to the pressure, so r(x) and w(x) do too, and those geometry-response terms are
+        # not self-adjoint. They are subleading -- measured asymmetry 2.3e-3 -- so the
+        # symmetric part dominates by roughly three orders of magnitude, which is what the
+        # energy argument actually needs and what this guards. Asserting exact symmetry of
+        # the full Jacobian, as an earlier version of this test did, asserts something false.
         p, _, _, _, R, _ = setup(0.3)
         J = ForwardDiff.jacobian(R, zeros(p.N + 1))
-        @test norm(J - J') / norm(J + J') < 1e-8
+        asym = norm(J - J') / norm(J + J')
+        @test asym < 1e-2
+        @test asym > 1e-6      # and it is NOT exactly symmetric: pins the above as the
+                               # real behaviour rather than a tolerance nobody checked
     end
 
     @testset "zero pressure gives the free-flight state" begin

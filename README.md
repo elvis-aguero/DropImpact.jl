@@ -137,10 +137,23 @@ reaches its maximum at `τ ≈ 0.89` against the DNS value `τ ≈ 1.46`, and do
 though the total contact time is accurate to 3 %. Refining `N` makes the peak
 *worse*, which points at the unresolved pressure profile as the mechanism.
 
-Low Weber numbers are currently pathologically slow — a single `We ≈ 0.012` run
-does not finish in the time a `We ≈ 1` run takes forty times over. The cause is
-not yet diagnosed, and `scripts/validate_sweep.jl` should not be expected to
-complete across the full published range until it is.
+There is also an isolated performance pathology, and it is *not* a low-Weber
+trend as an earlier note here claimed. Timed across the range at `M = L = 60`:
+
+| `We` | wall (s) | steps | ms/step | contact time |
+|---|---|---|---|---|
+| 0.0121 | 48 | 719 | 67 | 13.999 (hit the `t_end` cap) |
+| 0.0646 | 27 | 732 | 36 | 4.776 |
+| 0.3000 | **555** | 930 | **597** | 4.369 |
+| 1.0958 | 23 | 743 | 31 | 4.262 |
+| 3.0000 | 24 | 746 | 32 | 4.186 |
+
+`We ≈ 0.3` costs twenty times more per step than either of its neighbours, which
+is a localised defect — most likely the feasibility band search thrashing — and
+not a smooth trend in `We`. Separately, `We = 0.0121` never terminates contact
+within `t_end = 14`. Both are open. `scripts/validate_sweep.jl` will run, but
+expect one or two points to dominate its wall time and the lowest `We` to report
+a contact time truncated by the integration window.
 
 ## Rendering
 
