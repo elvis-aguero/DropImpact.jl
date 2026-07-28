@@ -157,7 +157,13 @@ end
 const IX0, IZ0 = 1.20, 2.02     # axis origin, world coordinates
 const IW, IH = 0.92, 0.66       # axis lengths
 
-"""Draw the inset axes with ticks and labels; returns the p-value -> world-z map."""
+"""Draw the inset axes with ticks and labels; returns the p-value -> world-z map.
+
+`rc_max`, `pmin`, `pmax` are FIXED for the whole animation, computed once by
+`global_ranges` over every frame. Rescaling them per frame -- as an earlier version did --
+makes the inset unreadable as a time series: the curve would keep its shape while the
+axis silently changed underneath it, so two frames could not be compared, which is the
+main thing one wants an inset like this for."""
 function inset_axes!(c::Canvas, rc_max, pmin, pmax)
     span = max(pmax - pmin, 1e-12)
     z_of_p(v) = IZ0 + (v - pmin) / span * IH
@@ -186,7 +192,7 @@ function inset_axes!(c::Canvas, rc_max, pmin, pmax)
     return z_of_p
 end
 
-function frame(lvl, p::Params, f)
+function frame(lvl, p::Params, f, rc_max, pmin, pmax)
     c = Canvas()
     fillbath!(c, lvl, p)
 
@@ -218,10 +224,11 @@ function frame(lvl, p::Params, f)
         xs = range(xc, 1.0; length=110)
         pv = [pressure_poly_raw(chat, xc, x) for x in xs]
         prs = [forward_map_r(lvl.drop.beta, acos(clamp(x, -1, 1)), p.L) for x in xs]
-        rcm = max(maximum(prs), 1e-9)
-        pmin, pmax = min(minimum(pv), 0.0), max(maximum(pv), 1e-12)
-        z_of_p = inset_axes!(c, rcm, pmin, pmax)
-        polyline!(c, IX0 .+ IW .* prs ./ rcm, [z_of_p(v) for v in pv], CONTACT; rad=1)
+        z_of_p = inset_axes!(c, rc_max, pmin, pmax)
+        # clamp to the fixed axes rather than rescaling them
+        zc_of(v) = z_of_p(clamp(v, pmin, pmax))
+        polyline!(c, IX0 .+ IW .* clamp.(prs ./ rc_max, 0.0, 1.0),
+                  [zc_of(v) for v in pv], CONTACT; rad=1)
         ia, ja = px_of(IX0, IZ0)
         text!(c, ia + 26, ja, "f=" * @sprintf("%.4f", f), CONTACT; scale=2)
     end
@@ -248,6 +255,21 @@ function main()
     fmap = Dict(round(d.t, digits=12) => d.f for d in diag)
     println("  $(length(levels)) levels, $(length(diag)) contact steps")
 
+    # FIXED inset ranges, over the whole run: the pressure axis must not move between
+    # frames or the inset cannot be read as a time series.
+    rc_max, pmin, pmax = 1e-9, 0.0, 1e-12
+    for lv in levels
+        lv.X === nothing && continue
+        thc = lv.X[end]; thc <= 0 && continue
+        chat = lv.X[1:p.N+1]; xc = cos(thc)
+        for x in range(xc, 1.0; length=110)
+            v = pressure_poly_raw(chat, xc, x)
+            pmin = min(pmin, v); pmax = max(pmax, v)
+            rc_max = max(rc_max, forward_map_r(lv.drop.beta, acos(clamp(x, -1, 1)), p.L))
+        end
+    end
+    @printf("  fixed inset ranges: r in [0, %.4f], p in [%.4f, %.4f]\n", rc_max, pmin, pmax)
+
     # resample uniformly in time so the video plays at constant physical rate
     nframes = 400
     tgrid = range(levels[1].t, levels[end].t; length=nframes)
@@ -258,7 +280,7 @@ function main()
         for (n, t) in enumerate(tgrid)
             lvl = levels[argmin(abs.(tl .- t))]
             f = get(fmap, round(lvl.t, digits=12), 0.0)
-            c = frame(lvl, p, f)
+            c = frame(lvl, p, f, rc_max, pmin, pmax)
             write(io, "P6\n$W $H\n255\n")
             buf = Vector{UInt8}(undef, W * H * 3)
             k = 1

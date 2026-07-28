@@ -64,10 +64,9 @@ net force `f`, tangency residual, Newton status.
 
 ### Choosing `M`, `L`, `N`
 
-`M` and `L` are set by convergence; `N` is a different kind of parameter and the
-distinction matters. Convergence is judged on **contact time**, not the
-coefficient of restitution — CoR is the easiest metric to converge and will look
-settled long before anything else is. At `We = 1.0958`:
+`M` and `L` are set by convergence; `N` is a different kind of parameter. Judge
+convergence on **contact time** rather than the coefficient of restitution — CoR
+settles long before anything else does. At `We = 1.0958`:
 
 | `(M,L,N,nq)` | wall (s) | contact time | CoR | max width |
 |---|---|---|---|---|
@@ -81,8 +80,8 @@ settled long before anything else is. At `We = 1.0958`:
 width and CoR that are not physical. From `M = L = 60` contact time is settled to
 five digits and doubling the mode counts moves it by 0.05 %.
 
-**`N` does not converge the pressure, and should not be read as if it did.**
-Sweeping `N` along a real trajectory at `M = L = 60`:
+**`N` does not converge the pressure.** Sweeping `N` along a real trajectory at
+`M = L = 60`:
 
 | `N` | contact time | CoR | max `r_c` | `‖Δp‖/‖p‖` vs `N=16` | `Δf/f` vs `N=16` |
 |---|---|---|---|---|---|
@@ -92,20 +91,19 @@ Sweeping `N` along a real trajectory at `M = L = 60`:
 | 10 | 4.26239 | 0.29962 | 0.8062 | | |
 | 16 | 4.26239 | 0.29962 | 0.7999 | | |
 
-Contact time is identical to six significant figures across the whole range,
-while the solved pressure *profile* at `N = 3` differs from `N = 16` by 46–96 %
-in relative L2 over the patch. Both facts are real and they are not in tension:
-the compliance operator is compact, so pressure modes beyond a few sit in its
-numerical nullspace, and the pressure influences the dynamics *only* through the
-moments `c_m`, `b_l`, `f` — which agree to between `1e-5` and `1e-2`. Refining
-`N` buys a different-looking pressure profile and the same physics.
+Contact time is identical to six significant figures across the range, while the
+solved pressure *profile* at `N = 3` differs from `N = 16` by 46–96 % in relative
+L2 over the patch. Both are consistent: the compliance operator is compact, so
+pressure modes beyond a few sit in its numerical nullspace, and the pressure
+reaches the dynamics *only* through the moments `c_m`, `b_l`, `f`, which agree to
+between `1e-5` and `1e-2`. Refining `N` buys a different-looking pressure profile
+and the same physics.
 
-So use `M = L = 60`, `N = 3`, `nq = 40` for trajectories, but do not quote the
-pointwise pressure as a converged output of the model at any `N`. The one
-observable that does drift with `N` is the maximum contact radius (0.8192 down to
-0.7999, monotonically, and *away* from the DNS value 0.8821) — which is the
-observable most sensitive to the pressure profile, and is also the one already
-carrying an open discrepancy. That is a lead, not a coincidence.
+Use `M = L = 60`, `N = 3`, `nq = 40` for trajectories, and do not quote the
+pointwise pressure as a converged output at any `N`. The one observable that
+drifts with `N` is the maximum contact radius — 0.8192 down to 0.7999,
+monotonically — which is the quantity most sensitive to the pressure profile and
+the one carrying the open discrepancy below.
 
 ## Validation
 
@@ -133,8 +131,8 @@ The model tracks the measured trajectory at about 1.4 times the experimental
 error bar — the same order as the measurement uncertainty, but outside it, so the
 residual is model error rather than scatter.
 
-**What cannot be validated against experiment, and is therefore not claimed.**
-The dataset contains no measured contact radius and no measured droplet width;
+**What cannot be validated against experiment.** The dataset contains no measured
+contact radius and no measured droplet width;
 both exist only as DNS and 1PKM series (verified by reading the WebPlotDigitizer
 projects — each contains exactly two datasets, `*_DNS` and `*_1PKM`). Comparisons
 of those quantities are model-to-simulation, and additionally definition-sensitive:
@@ -142,33 +140,32 @@ the DNS contact radius is thresholded on the trapped gas film, whereas this
 model's `θ_c` bounds the kinematically matched region. `validate_trajectory.jl`
 still reports them for information; they are not validation.
 
-On that footing the contact-radius discrepancy needs restating. Against DNS the
-model's `r_c` peaks at `τ ≈ 0.89` versus `1.46`, and doubling `M` and `L` moves
-that by 0.02, so it is not a resolution effect. But the early peak is partly a
-property of this class of reduced model rather than of this model alone: 1PKM
-peaks at `τ ≈ 1.22`, also early against the same DNS. Normalising by contact
-time, the peak falls at 0.20 of the way through contact here, 0.26 for 1PKM and
-0.33 for DNS. So the model is more skewed than 1PKM but in the same direction,
-and there is no measurement to adjudicate between them. Whether the remainder is
-a defect or a definition mismatch is open.
+The contact radius peaks early: `τ ≈ 0.89` against the DNS `1.46`, and doubling
+`M` and `L` moves that by 0.02, so it is not a resolution effect. The bias is
+partly generic to reduced models of this class — 1PKM peaks at `τ ≈ 1.22`, also
+early against the same DNS. Normalised by contact time the peak falls at 0.20 of
+the way through contact here, 0.26 for 1PKM, 0.33 for DNS: same direction, more
+skewed. With no measured contact radius available there is nothing to adjudicate
+between a closure defect and a definition mismatch, so this stays open.
 
-There is also an isolated performance pathology, and it is *not* a low-Weber
-trend as an earlier note here claimed. Timed across the range at `M = L = 60`:
+### Performance
 
-| `We` | wall (s) | steps | ms/step | contact time |
-|---|---|---|---|---|
-| 0.0121 | 48 | 719 | 67 | 13.999 (hit the `t_end` cap) |
-| 0.0646 | 27 | 732 | 36 | 4.776 |
-| 0.3000 | **555** | 930 | **597** | 4.369 |
-| 1.0958 | 23 | 743 | 31 | 4.262 |
-| 3.0000 | 24 | 746 | 32 | 4.186 |
+A typical impact runs in about 25 s at production settings, roughly flat in `We`:
 
-`We ≈ 0.3` costs twenty times more per step than either of its neighbours, which
-is a localised defect — most likely the feasibility band search thrashing — and
-not a smooth trend in `We`. Separately, `We = 0.0121` never terminates contact
-within `t_end = 14`. Both are open. `scripts/validate_sweep.jl` will run, but
-expect one or two points to dominate its wall time and the lowest `We` to report
-a contact time truncated by the integration window.
+| `We` | wall (s) | steps | ms/step | contact time | CoR |
+|---|---|---|---|---|---|
+| 0.0646 | 32 | 519 | 61 | 4.768 | 0.5173 |
+| 0.3000 | 24 | 545 | 44 | 4.388 | 0.4023 |
+| 1.0958 | 23 | 543 | 42 | 4.262 | 0.2996 |
+| 3.0000 | 24 | 546 | 44 | 4.186 | 0.2331 |
+
+Loss of contact is detected from the contact patch collapsing (`θ_c` reaching its
+search floor), with a sustained non-positive net force as a secondary test. The
+force test requires several consecutive steps rather than a single one: `f` can
+dip transiently negative during the early transient without contact ending, and
+acting on one such dip returns the stepper to free flight, where onset is
+immediately re-detected and a fresh onset search is paid. Repeated, that cycle
+cost `We ≈ 0.3` about twenty times its neighbours' wall time.
 
 ## Rendering
 

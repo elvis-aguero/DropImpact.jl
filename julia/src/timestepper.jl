@@ -252,7 +252,7 @@ minimum step size.
 """
 function run_simulation(p::Params; t_end::Float64, dt_init::Float64=1e-3,
     dt_min::Float64=1e-8, dt_max::Float64=0.02, theta_c_floor::Float64=2e-3,
-    verbose::Bool=false)
+    n_f_negative::Int=3, verbose::Bool=false)
     lvl0 = initial_level(p)
     hist = SimHistory(lvl0, lvl0)
     levels = Level[lvl0]
@@ -263,6 +263,7 @@ function run_simulation(p::Params; t_end::Float64, dt_init::Float64=1e-3,
     chat_guess = zeros(p.N + 1)
     nsteps = 0
     just_left = false
+    neg_streak = 0
     while hist.curr.t < t_end && nsteps < 200_000
         nsteps += 1
         dt = min(dt, dt_max, t_end - hist.curr.t)
@@ -285,6 +286,7 @@ function run_simulation(p::Params; t_end::Float64, dt_init::Float64=1e-3,
                 # to the true onset instant as the step floor allows, then hand the
                 # geometric seed to the argmin selector from the next step on.
                 theta_c_prev = th
+                neg_streak = 0
                 chat_guess = zeros(p.N + 1)
                 chat_guess[1] = 1e-3
                 phase = InContact
@@ -305,17 +307,30 @@ function run_simulation(p::Params; t_end::Float64, dt_init::Float64=1e-3,
             verbose && println("  contact lost (no admissible theta_c) at t=$(round(hist.curr.t,digits=5))")
             continue
         end
-        # LOSS OF CONTACT. AlventosaEtAl2023 monitor sign(f), which is necessary but not
-        # sufficient here: as the patch collapses, f -> 0 from ABOVE and never changes
-        # sign, so an f-only test leaves the droplet nominally in contact while it climbs
-        # away (observed: theta_c pinned at the search floor with f ~ 1e-7 for thousands
-        # of steps). The patch collapsing IS the loss of contact, so the primary test is
-        # on theta_c, with sign(f) retained as the secondary one.
-        if info.f <= 0 || info.theta_c <= theta_c_floor
+        # LOSS OF CONTACT. Two failure modes had to be designed around, in opposite
+        # directions.
+        #
+        # AlventosaEtAl2023 monitor sign(f). That is not sufficient here: as the patch
+        # collapses, f -> 0 from ABOVE and never changes sign, so an f-only test leaves the
+        # droplet nominally in contact while it climbs away (observed: theta_c pinned at
+        # the search floor with f ~ 1e-7 for thousands of steps). The patch collapsing IS
+        # the loss of contact, so theta_c reaching its floor is the primary test.
+        #
+        # But sign(f) alone is also too EAGER. f can dip transiently negative during the
+        # early transient without contact ending -- measured at We = 0.3, where f runs
+        # +0.0002, +0.0063, +0.0367, -0.0038, +0.0321, +0.0269, ... and the single negative
+        # excursion at step 4 is followed by a healthy positive force. Ending contact there
+        # sends the stepper back to free flight, where onset is immediately re-detected and
+        # a fresh (expensive) onset search is paid; the cycle repeats and the run costs
+        # twenty times what its neighbours in We do. A transient dip is therefore ignored:
+        # f must stay non-positive for `n_f_negative` consecutive steps.
+        neg_streak = info.f <= 0 ? neg_streak + 1 : 0
+        if neg_streak >= n_f_negative || info.theta_c <= theta_c_floor
             phase = FreeFlight
             dt = dt_init
             just_left = true
-            verbose && println("  contact lost (" * (info.f <= 0 ? "f<=0" : "patch collapsed") *
+            verbose && println("  contact lost (" *
+                               (neg_streak >= n_f_negative ? "f<=0 for $neg_streak steps" : "patch collapsed") *
                                ") at t=$(round(hist.curr.t, digits=5))")
             continue
         end

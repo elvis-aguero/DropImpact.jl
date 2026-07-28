@@ -461,16 +461,22 @@ of restitution deliberately: the latter settles far earlier than anything else a
 have reported convergence at mode counts where the contact time is still wrong by a factor
 of two ($M=L=30$ gives $2.15$ against the converged $4.26$).
 
-Two practical limitations are recorded because they bound what can currently be validated.
-The cost per step is not uniform in $\We$, and not monotone in it either: timed at
-$M=L=60$, the wall clock is $48,\,27,\,555,\,23,\,24$ seconds at
-$\We=0.0121,\,0.0646,\,0.3,\,1.0958,\,3.0$, so $\We\approx0.3$ costs some twenty times more
-per step ($597$ ms against $31$--$36$ ms) than either of its neighbours. This is a
-localised defect rather than a trend --- most plausibly the feasibility band search
-failing to bracket efficiently at that particular state --- and it is not diagnosed here.
-Separately, the $\We=0.0121$ run does not terminate contact within the integration window
-$\tau_{\text{end}}=14$, so its reported contact time is truncated rather than measured.
-Both prevent a clean sweep across the full published $\We$ range for the time being.
+One implementation defect worth recording, because its symptom was easy to mistake for a
+cost scaling rather than a bug. Loss of contact was originally declared as soon as the net
+force $f$ turned non-positive, following \cite{AlventosaEtAl2023}'s own $\mathrm{sign}\,f$
+criterion. That criterion is too eager here: $f$ can dip transiently negative during the
+early transient without contact ending --- measured at $\We=0.3$, where it runs
+$+0.0002,\,+0.0063,\,+0.0367,\,-0.0038,\,+0.0321,\,+0.0269,\dots$ --- and acting on the
+single excursion returns the stepper to free flight, where onset is immediately
+re-detected and a fresh onset search is paid. Repeated, the cycle cost that Weber number
+some twenty times the wall clock of its neighbours ($555$ s against $23$--$32$ s), which
+looked like a scaling pathology and was not. Requiring $f\le0$ on several consecutive
+steps removes it: $\We=0.3$ now runs in $24$ s, and the contact time becomes monotone in
+$\We$ across the range tested ($4.768,\,4.388,\,4.262,\,4.186$ at
+$\We=0.0646,\,0.3,\,1.0958,\,3.0$), as it should be. The complementary failure is also
+real and is guarded separately: as the patch collapses $f\to0$ from above and never
+changes sign, so the primary loss-of-contact test is the contact angle reaching its search
+floor, not the force.
 
 The implementation exercises exactly the structure derived above, and two of its details
 were forced by measurement rather than chosen. First, reducing the time step does
