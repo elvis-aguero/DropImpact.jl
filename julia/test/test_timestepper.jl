@@ -32,33 +32,70 @@
         end
     end
 
-    @testset "warm_start_extrapolated falls back sensibly with no prior contact solution" begin
-        X = warm_start_extrapolated(0.01, nothing, 0.0, nothing, 0.0, 2)
-        @test length(X) == 4  # N+2 = 2+2
-        @test X[end] > 0
-    end
-
-    # DISABLED 2026-07-27: "kinematic_contact_step escapes the theta_c=0 degenerate root"
-    # tested a now-superseded interim mechanism (predates the design doc's
-    # §subsubsec:contact-angle geometric-crossing theory, eq:theta-c-crossing — that
-    # theory is not yet implemented in Julia at all, see STATUS.md). Its exact numeric
-    # behavior stopped being a correctness target once a genuine, confirmed sign bug
-    # (z_d entering the contact condition with the wrong sign — see accel_closure.jl's
-    # outer_bracket_of_x) was fixed underneath it. Re-enable or replace with a test of
-    # eq:theta-c-crossing itself once that's implemented; this Julia `Test` version
-    # doesn't support `@testset ... skip=true`, so the body is removed rather than kept
-    # dead and silently un-run.
-
-    @testset "contact_step returns a usable Level for a small, well-posed case" begin
+    @testset "onset_theta_c fires exactly when the pole penetrates" begin
         p = Params(We=1.0, Bo=0.2, Oh=0.05, M=6, L=6, N=1, b=6.0, h0=2.0, nq=16)
         lvl0 = initial_level(p)
         hist = SimHistory(lvl0, lvl0)
-        X_guess = warm_start(nothing, p.N)
-        lvl, result, admis = contact_step(hist, 1e-3, X_guess, p)
+        # z_cm(0) = 1 puts the pole exactly at the bath surface, so one step of free
+        # fall already penetrates and onset must be detected immediately.
+        th = onset_theta_c(hist, 1e-3, p)
+        @test th !== nothing
+        @test 0 < th < π / 2
+        # Lifted well clear of the bath, there is no crossing to find.
+        high = Level(lvl0.bath, lvl0.drop, COMState(3.0, -0.1), 0.0, 0.0, nothing)
+        @test onset_theta_c(SimHistory(high, high), 1e-3, p) === nothing
+    end
+
+    @testset "the feasible set of contact angles is a band, not a half-line" begin
+        # The property that forced the outer search to be a bracketed edge search rather
+        # than a bisection on a monotone predicate (design doc §subsubsec:contact-angle):
+        # candidates are infeasible at small theta_c (interpenetration) and infeasible
+        # again at large theta_c (eq:check-monotone-r fails), with a feasible band between.
+        # Guarding the UPPER edge is enough to catch a regression to monotonicity.
+        p = Params(We=1.0, Bo=0.2, Oh=0.05, M=8, L=8, N=1, b=6.0, h0=2.0, nq=20)
+        lvl0 = initial_level(p)
+        hist = SimHistory(lvl0, lvl0)
+        okbig, _ = feasible_at(hist, 1e-3, 1.45, [1e-3, 0.0], p)
+        @test !okbig      # a patch reaching the droplet's widest point is inadmissible
+    end
+
+    @testset "select_theta_c converges as dt -> 0 to the previous angle" begin
+        # A consistency check on the whole nested step: with the state frozen, shrinking
+        # the step must return the contact angle it started from, since the pressure's
+        # authority over the geometry scales as dt^2.
+        p = Params(We=1.0, Bo=0.2, Oh=0.05, M=10, L=10, N=1, b=6.0, h0=2.0, nq=20)
+        lvl0 = initial_level(p)
+        hist = SimHistory(lvl0, lvl0)
+        th0 = onset_theta_c(hist, 1e-3, p)
+        lvl, info = contact_step(hist, 1e-3, th0, [1e-3, 0.0], p)
         @test lvl !== nothing
-        @test result.status in (Converged, Stalled)
+        hist.prev = hist.curr; hist.curr = lvl
+        prev = info.theta_c
+        got = Float64[]
+        for dt in (1e-4, 1e-5, 1e-6)
+            r = select_theta_c(hist, dt, prev, lvl.X[1:p.N+1], p; dt_ref=1e-3)
+            @test r !== nothing
+            push!(got, r.theta_c)
+        end
+        @test abs(got[end] - prev) < abs(got[1] - prev) + 1e-12   # monotone approach
+        @test abs(got[end] - prev) < 5e-3
+    end
+
+    @testset "contact_step returns a usable Level, with a decelerating force" begin
+        p = Params(We=1.0, Bo=0.2, Oh=0.05, M=10, L=10, N=1, b=6.0, h0=2.0, nq=20)
+        lvl0 = initial_level(p)
+        hist = SimHistory(lvl0, lvl0)
+        th0 = onset_theta_c(hist, 1e-3, p)
+        lvl, info = contact_step(hist, 1e-3, th0, [1e-3, 0.0], p)
+        @test lvl !== nothing
         @test all(isfinite, lvl.bath.a)
         @test all(isfinite, lvl.drop.beta)
         @test isfinite(lvl.com.z)
+        @test length(lvl.X) == p.N + 2            # (chat..., theta_c)
+        @test 0 < info.theta_c < π / 2
+        # The selected angle sits on the feasibility boundary, where the net contact
+        # force is positive: the pressure must DECELERATE the droplet. A sign error in
+        # the COM force integral (a bug this project has actually had) flips this.
+        @test info.f > 0
     end
 end

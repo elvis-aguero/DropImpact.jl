@@ -1,9 +1,5 @@
 @testset "structural reductions" begin
     @testset "drop_affine: l=0,1 entries are structurally zero (never evolved)" begin
-        # b_l_all's own l=0,1 entries are NOT numerically zero (its docstring: "computed
-        # here anyway for a uniform 1-indexed vector"), but drop_affine's lambda/gam ARE
-        # exactly zero there since those modes are simply never advanced — the real
-        # structural invariant.
         p = Params(We=1.0, Bo=0.2, Oh=0.05, M=3, L=5, N=2, b=6.0, h0=2.0, nq=16)
         drop = DropModeState(p.L)
         lambda, gam = drop_affine(drop, drop, p, 0.01, 0.01)
@@ -11,47 +7,75 @@
         @test gam[1] == 0.0 && gam[2] == 0.0
     end
 
-    @testset "K_of_x at the undisturbed (zero) frozen state reduces to bare Bo" begin
-        # a=adot=beta=betadot=0 everywhere: every bath/drop term in K vanishes by
-        # inspection (each is linear or higher in the frozen state), leaving only the
-        # constant +Bo from z_cm''=1.5f-Bo's gravity term.
-        p = Params(We=1.0, Bo=0.37, Oh=0.05, M=5, L=5, N=1, b=6.0, h0=2.0, nq=16)
-        a0 = zeros(p.M + 1); beta0 = zeros(p.L + 1)
-        for x in (-0.5, 0.0, 0.6, 0.95)
-            @test K_of_x(x, a0, a0, beta0, beta0, p) ≈ p.Bo
+    @testset "at beta = 0 the area weight w reduces exactly to x" begin
+        # r^2 = 1 - x^2 for an undeformed droplet, so w = -d[r^2]/dx / 2 = x. This identity
+        # is why measurements taken only at the undeformed state cannot distinguish the two
+        # candidate mechanisms for the droplet block's asymmetry (design doc
+        # §subsubsec:compliance) -- worth pinning so the reduction is not silently lost.
+        p = Params(We=1.0, Bo=0.2, Oh=0.05, M=3, L=6, N=2, b=6.0, h0=2.0, nq=16)
+        beta0 = zeros(p.L + 1)
+        for x in (0.1, 0.5, 0.9, 0.999)
+            @test w_of_x(beta0, x, p.L) ≈ x rtol = 1e-12
         end
     end
 
-    @testset "Pi_of_x at zero pressure moments is zero" begin
-        p = Params(We=1.0, Bo=0.2, Oh=0.05, M=5, L=5, N=1, b=6.0, h0=2.0, nq=16)
-        a0 = zeros(p.M + 1); beta0 = zeros(p.L + 1)
-        cm0 = zeros(p.M + 1); bl0 = zeros(p.L + 1)
-        for x in (-0.5, 0.0, 0.6, 0.95)
-            @test Pi_of_x(x, cm0, bl0, 0.0, a0, beta0, p) ≈ 0.0 atol = 1e-14
+    @testset "b_l reduces to the plain Legendre moment at pole contact" begin
+        # eq:b_l-selfadjoint carries an extra x*w relative to AlventosaEtAl2023's
+        # b_l = int p P_l dx. Since x -> 1 and w -> 1 as the patch shrinks to the pole, the
+        # two must agree there: the departure is O(theta_c^2), not a change of leading-order
+        # physics. Checked by comparing against a direct plain-measure quadrature.
+        p = Params(We=1.0, Bo=0.2, Oh=0.05, M=3, L=4, N=1, b=6.0, h0=2.0, nq=24)
+        beta0 = zeros(p.L + 1)
+        chat = [1.0, 0.0]
+        prev = Inf
+        for theta_c in (0.4, 0.2, 0.1, 0.05)
+            xc = cos(theta_c)
+            x, wq = mapped_nodes(xc, p.gauss_nodes, p.gauss_weights)
+            P, dP = legendre_tables(x, p.L)
+            _, _, w = geom_at_nodes(beta0, x, P, dP, p.L)
+            bl = b_l_all(chat, xc, x, wq, P, w, p.L)
+            # plain-measure reference: int p P_l dx, no x and no w
+            plain = [sum(wq[i] * pressure_poly_raw(chat, xc, x[i]) * P[i][l+1]
+                         for i in eachindex(x)) for l in 0:p.L]
+            rel = maximum(abs.(bl .- plain)) / max(maximum(abs.(plain)), eps())
+            @test rel < prev            # gap closes monotonically as the patch shrinks
+            prev = rel
+        end
+        @test prev < 0.02                # and is small by theta_c = 0.05
+    end
+
+    @testset "com force is positive for positive pressure, and exact for p == 1" begin
+        # f = 2 int p w dx with w = x at beta = 0, so p == 1 gives f = 1 - xc^2 = r_c^2,
+        # matching the direct radial integral 2 int_0^{r_c} r dr. The SIGN matters: getting
+        # it backwards makes the pressure accelerate the droplet into the bath.
+        p = Params(We=1.0, Bo=0.2, Oh=0.05, M=3, L=4, N=0, b=6.0, h0=2.0, nq=24)
+        beta0 = zeros(p.L + 1)
+        for theta_c in (0.1, 0.3, 0.7)
+            xc = cos(theta_c)
+            x, wq = mapped_nodes(xc, p.gauss_nodes, p.gauss_weights)
+            P, dP = legendre_tables(x, p.L)
+            _, _, w = geom_at_nodes(beta0, x, P, dP, p.L)
+            f = com_force_closed([1.0], xc, x, wq, w)
+            @test f > 0
+            @test f ≈ sin(theta_c)^2 rtol = 1e-10
         end
     end
 
-    @testset "outer_bracket_of_x reduces to -cosθ=-x when a_frozen is zero" begin
-        # SIGN CORRECTED 2026-07-27: the bracket is -cosθ+sinθΣa_mk_mJ1(...), not
-        # +cosθ+... — z_d enters the contact condition C with the opposite sign from
-        # an earlier version of both the design doc and this code (see
-        # accel_closure.jl's outer_bracket_of_x docstring).
-        p = Params(We=1.0, Bo=0.2, Oh=0.05, M=5, L=5, N=1, b=6.0, h0=2.0, nq=16)
-        a0 = zeros(p.M + 1); beta0 = zeros(p.L + 1)
-        for x in (-0.5, 0.0, 0.6, 0.95)
-            @test outer_bracket_of_x(x, a0, beta0, p) ≈ -x
-        end
-    end
-
-    @testset "xi_tau_of_x vanishes with L=2 (no evolving drop modes contribute)" begin
-        p = Params(We=1.0, Bo=0.2, Oh=0.05, M=3, L=2, N=1, b=6.0, h0=2.0, nq=16)
-        betadot = zeros(p.L + 1)
-        @test xi_tau_of_x(betadot, 0.3, p.L) == 0.0
-    end
-
-    @testset "min_nq_for_exact_com matches its documented degree formula" begin
-        for N in 0:3, L in 2:6
-            @test min_nq_for_exact_com(N, L) == cld(N + 2L + 2, 2)
-        end
+    @testset "c_m at zero pressure is zero, and the m=0 weight is regular" begin
+        # Under the corrected normalization 2/(b J0(k_m b))^2 (design doc eq:bessel-norm)
+        # the m=0 piston mode is no longer singular: J0(0)=1 gives the finite weight 2/b^2.
+        p = Params(We=1.0, Bo=0.2, Oh=0.05, M=5, L=4, N=1, b=6.0, h0=2.0, nq=20)
+        beta0 = zeros(p.L + 1)
+        xc = cos(0.3)
+        x, wq = mapped_nodes(xc, p.gauss_nodes, p.gauss_weights)
+        P, dP = legendre_tables(x, p.L)
+        _, r, w = geom_at_nodes(beta0, x, P, dP, p.L)
+        cm = c_m_all(zeros(p.N + 1), xc, x, wq, r, w, p.k, p.b)
+        @test all(iszero, cm)
+        cm1 = c_m_all([1.0, 0.0], xc, x, wq, r, w, p.k, p.b)
+        @test all(isfinite, cm1)          # including m = 0
+        @test cm1[1] != 0                 # the piston mode's projection is nonzero...
+        kappa, _ = bath_affine(BathModeState(p.M), BathModeState(p.M), p, 0.01, 0.01)
+        @test kappa[1] == 0.0             # ...but its pressure response is exactly zero
     end
 end

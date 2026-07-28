@@ -1,3 +1,12 @@
+# SUPERSEDED -- RETAINED FOR THE RECORD ONLY.  This script verifies claims about
+# the acceleration-level closure (former Sec. 4), DELETED from the design doc.
+# Its premise -- that the O(delta^2) pressure sensitivity of the position-level closure
+# causes ill-conditioning -- is false: the factor is uniform across the pressure block,
+# and cond(cA)=cond(A).  See docs §subsec:corrections and audit_compliance_operator.jl.
+#
+# It is no longer cited by docs/next-gen-KM-model.tex and its conclusions no longer
+# describe the model.  Do not treat a passing run here as support for current theory.
+
 # Symbolic (CAS-based) verification of design doc Section 4, "An acceleration-level
 # closure" — mechanically re-derives eq:velocity-constraint, eq:accel-constraint-raw,
 # and the Pi/K split after ODE substitution, by symbolic differentiation rather than

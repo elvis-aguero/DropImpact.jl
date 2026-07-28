@@ -1,3 +1,11 @@
+# SUPERSEDED -- RETAINED FOR THE RECORD ONLY.  This script verifies claims about
+# the practical solve stability of the joint Newton Jacobian, which no longer exists:
+# the inner system's condition number is measured at order ten, uniformly in delta.
+# Superseded by audit_nested_closure.jl.
+#
+# It is no longer cited by docs/next-gen-KM-model.tex and its conclusions no longer
+# describe the model.  Do not treat a passing run here as support for current theory.
+
 # Does cond(J) ~ 1e12-1e19 (found at small theta_c, N=3) actually translate into a
 # practically unstable/inaccurate SOLVE STEP, using the real solver this codebase uses
 # (Levenberg-Marquardt-damped least squares, newton.jl -- not a naive J\R, precisely

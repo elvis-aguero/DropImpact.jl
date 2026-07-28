@@ -1,3 +1,12 @@
+# SUPERSEDED -- RETAINED FOR THE RECORD ONLY.  This script verifies claims about
+# a basis comparison on the joint Newton Jacobian, which no longer exists.  The
+# shifted-Legendre basis is retained on the separate ground of exact self-orthogonality
+# (docs §subsubsec:pressure-representation); its conditioning advantage over monomials
+# is no longer the reason.  Superseded by audit_nested_closure.jl.
+#
+# It is no longer cited by docs/next-gen-KM-model.tex and its conclusions no longer
+# describe the model.  Do not treat a passing run here as support for current theory.
+
 # Closes the reviewer's required gap: does substituting shifted-Legendre-in-psi for
 # monomial-in-psi actually move the FULL nonlinear Newton-Jacobian conditioning (not
 # just the basis-only self-Gram number, which the reviewer correctly flagged as 5-7

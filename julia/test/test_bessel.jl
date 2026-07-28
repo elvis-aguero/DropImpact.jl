@@ -15,7 +15,7 @@
     end
 
     @testset "ForwardDiff through SpecialFunctions Bessel — the single highest-leverage risk" begin
-        # Exact call pattern used throughout bessel_moments.jl/accel_closure.jl:
+        # Exact call pattern used throughout bessel_moments.jl:
         # a Float64 constant (k_m) times a Dual (from x -> r(x) depending on the
         # differentiated unknown), fed into besselj0/besselj1.
         km = 3.8317059702

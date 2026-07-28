@@ -1,3 +1,11 @@
+# SUPERSEDED -- RETAINED FOR THE RECORD ONLY.  This script verifies claims about
+# the geometric crossing row C(theta_c)=0 solved jointly with pressure, REMOVED from
+# the design doc.  theta_c is now an outer scalar parameter, not a Newton unknown.
+# See docs §subsubsec:contact-angle and audit_nested_closure.jl.
+#
+# It is no longer cited by docs/next-gen-KM-model.tex and its conclusions no longer
+# describe the model.  Do not treat a passing run here as support for current theory.
+
 # Numerical conditioning comparison: does replacing the POSITION-level Galerkin rows
 # (eq:galerkin) with the ACCELERATION-level rows (eq:accel-constraint/eq:accel-galerkin,
 # Section 4 of the design doc) actually fix the catastrophic O(δ²) Jacobian

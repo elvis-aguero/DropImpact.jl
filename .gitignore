@@ -15,3 +15,6 @@ docs/*.synctex.gz
 .claude/settings.local.json
 
 .DS_Store
+
+# rendered media: the README gif is tracked, full-resolution mp4s are not
+julia/output/media/*.mp4

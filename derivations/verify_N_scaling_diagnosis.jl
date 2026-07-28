@@ -1,3 +1,11 @@
+# SUPERSEDED -- RETAINED FOR THE RECORD ONLY.  This script verifies claims about
+# the growth of cond(J) with N for the joint Newton system, whose mechanism is now
+# identified: the compactness of the compliance operator plus the rank law eq:rank-law.
+# Superseded by audit_compliance_operator.jl.
+#
+# It is no longer cited by docs/next-gen-KM-model.tex and its conclusions no longer
+# describe the model.  Do not treat a passing run here as support for current theory.
+
 # Diagnosing WHY cond(J) blows up with pressure truncation order N (found in
 # verify_crossing_conditioning.jl to survive the acceleration-level fix largely
 # unchanged in kind, only in magnitude) — separating two structurally different

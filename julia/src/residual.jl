@@ -1,162 +1,173 @@
-# The joint residual R(X) (design doc eq:newton-residual-tangency and, since Section 4,
-# eq:accel-constraint in place of eq:newton-residual-galerkin, §subsec:newton/
-# §subsec:accel-galerkin): the sole function meant to be wrapped by ForwardDiff.jacobian.
+# The INNER residual of the nested contact closure (design doc eq:summary-galerkin).
 #
-# X = (hat_c_0,...,hat_c_N, theta_c) ∈ R^{N+2} (eq:newton-unknowns). Every other
-# quantity is computed from X via the explicit, acyclic (DAG) chain established in
-# the design doc: p(x;X) -> b_l(X) -> beta(X) -> {xi,r,z_d}(X) -> c_m(X)/W_n^{(m)}(X)
-# -> a_m(X) -> R(X). The affine coefficients (kappa,alpha,lambda,gam,kappa_cm,mu) are
-# passed in as plain Float64 data, computed ONCE per timestep by affine.jl and never
-# re-differentiated — X is the only argument whose type flows through generically.
+# theta_c is NOT an unknown here. It is a parameter of the outer scalar selection
+# (eq:theta-c-argmin, in timestepper.jl), fixed for the whole of each inner solve. That
+# nesting is what keeps this system's conditioning independent of the time step and of
+# order unity: every column carries the same O(delta^2) affine slope, and a uniform
+# scalar factor cannot change a condition number. Carrying theta_c as an extra unknown
+# instead mixes columns differing by delta^2 in scale and drives cond(J) to ~1e18 --
+# the defect an earlier revision of the design doc misdiagnosed as intrinsic to the
+# position-level closure and "fixed" with an acceleration-level reformulation, since
+# deleted (design doc §subsec:corrections).
 #
-# Since the acceleration-level fix (Section 4, accel_closure.jl): the first `N+1` rows
-# are now the Galerkin projection of C̈=Π+K (eq:accel-constraint), not the position-level
-# C — this is the actual fix for the confirmed O(δ²) Jacobian ill-conditioning (newton.jl's
-# module note). This requires the FROZEN τ^k state (`bath_frozen`,`drop_frozen` — the
-# previous converged Level's a_m,ȧ_m,β_l,β̇_l) as extra plain-Float64 arguments, alongside
-# X, never differentiated (same status as kappa/alpha/etc.). The tangency row (last entry)
-# is explicitly UNCHANGED — still the position-level eq:tangency-explicit, per the design
-# doc's own scoping (§subsec:accel-open: tangency's own O(δ²) sensitivity is disclosed as
-# a separate, still-open issue, not fixed here).
-
-"""`(1-xc)/(n+1) = ∫_{xc}^1 ψ(x)^n dx`, `ψ:=(x-xc)/(1-xc)` (dx=(1-xc)dψ, ψ:0→1), the
-elementary antiderivative needed for the constant `z_cm` term inside the Galerkin
-integral (design doc eq:galerkin, in the rescaled ψ basis — see pressure.jl)."""
-elementary_moment(xc, n::Integer) = (1 - xc) / (n + 1)
+# The Galerkin conditions are tested in the CYLINDRICAL measure w dx = r dr against the
+# SAME shifted-Legendre basis that represents the pressure. Both are required for the
+# resulting matrix to be symmetric (design doc §subsubsec:compliance): pairing a
+# different test basis against the trial basis destroys symmetry even when the operator
+# itself is self-adjoint.
 
 """
-    residual(X, kappa, alpha, lambda, gam, kappa_cm, mu, bath_frozen, drop_frozen, p) -> Vector
+    contact_quad(xc, p) -> (x, wq, P, dP, Ptil)
 
-`R(X) ∈ R^{N+2}`: the first `p.N+1` entries are the acceleration-level Galerkin residuals
-(eq:accel-constraint, §subsec:accel-galerkin), the last is the (still position-level)
-tangency residual (eq:newton-residual-tangency). Generic in `eltype(X)`; `bath_frozen`/
-`drop_frozen` (the previous converged Level's `BathModeState`/`DropModeState`, i.e. τ^k)
-are plain Float64 data, never differentiated — same status as `kappa`,`alpha`, etc.
+Node data for one contact patch, computed once per `xc` and reused by every moment
+integral, the Galerkin residual, and the AD sweep over them. `Ptil[i][n+1]` is the
+shifted-Legendre pressure/test basis `P̃_n(ψ(x_i))`. All plain `Float64`: these depend on
+`xc` alone, never on the pressure coefficients, so they are outside the AD tape.
 """
-function residual(X::AbstractVector, kappa::Vector{Float64}, alpha::Vector{Float64},
-    lambda::Vector{Float64}, gam::Vector{Float64}, kappa_cm::Float64, mu::Float64,
-    bath_frozen::BathModeState, drop_frozen::DropModeState, p::Params)
-    N = p.N
-    L = p.L
-    chat = @view X[1:N+1]
-    theta_c = X[N+2]
-    xc = cos(theta_c)
+function contact_quad(xc::Float64, p::Params)
+    x, wq = mapped_nodes(xc, p.gauss_nodes, p.gauss_weights)
+    P, dP = legendre_tables(x, p.L)
+    Ptil = [legendre_P_table(p.N, 2 * (xi - xc) / (1 - xc) - 1)[1:p.N+1] for xi in x]
+    return x, wq, P, dP, Ptil
+end
 
-    # b_l(X) -> beta(X): the acyclic step — depends only on chat, xc, never on geometry.
-    bl = b_l_all(chat, xc, L)
-    beta = gam .+ lambda .* bl   # length L+1, entries l=0,1 are 0+0*bl=0 automatically
+"""
+    unpack_state(chat, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p) -> (am, beta, zcm, f)
 
-    # f(X) -> z_cm(X)
-    f = com_force_closed(chat, xc, beta, L, p.com_nodes, p.com_weights)
-    zcm = mu + kappa_cm * f
+The evaluation chain of design doc §subsec:newton: pressure moments from `chat` at fixed
+`xc`, then the affine state advance eq:summary-states. `q` is the `contact_quad` tuple.
 
-    # c_m(X) -> a_m(X)
-    cm = c_m_all(chat, xc, beta, L, p.k, p.b, p.gauss_nodes, p.gauss_weights)
+One coupling is iterated rather than evaluated once: the self-adjoint `b_l`
+(eq:b_l-selfadjoint) carries the area weight `w(x,τ)`, which depends on `beta`, which
+depends on `b_l`. The fixed point converges because `lambda_l = O(δ²)` makes the map a
+strong contraction -- typically two or three passes. This is a genuine change from the
+earlier `w`-free `b_l`, for which the chain was acyclic.
+"""
+function unpack_state(chat::AbstractVector, xc, q, kappa::Vector{Float64},
+    alpha::Vector{Float64}, lambda::Vector{Float64}, gam::Vector{Float64},
+    kappa_cm::Float64, mu::Float64, p::Params)
+    x, wq, P, dP, _ = q
+    T = promote_type(eltype(chat), typeof(xc))
+    beta = Vector{T}(undef, p.L + 1)
+    @inbounds for l in 0:p.L
+        beta[l+1] = gam[l+1]
+    end
+    local xi, r, w
+    for _ in 1:12
+        xi, r, w = geom_at_nodes(beta, x, P, dP, p.L)
+        bl = b_l_all(chat, xc, x, wq, P, w, p.L)
+        beta_new = gam .+ lambda .* bl
+        done = maximum(abs.(beta_new .- beta)) < 1e-13
+        beta = beta_new
+        done && break
+    end
+    xi, r, w = geom_at_nodes(beta, x, P, dP, p.L)
+    cm = c_m_all(chat, xc, x, wq, r, w, p.k, p.b)
     am = alpha .+ kappa .* cm
+    f = com_force_closed(chat, xc, x, wq, w)
+    zcm = mu + kappa_cm * f
+    return am, beta, zcm, f
+end
 
-    # acceleration-level Galerkin residual (eq:accel-constraint): Π(x;X) uses cm/bl/f
-    # above (current-step pressure) but the FROZEN a_m^k/β_l^k for every outer geometric
-    # occurrence; K(x) is built entirely from the frozen state. zcm/am computed above are
-    # still needed (for unpack_state / advancing the next Level and the tangency row
-    # below), even though they no longer feed the Galerkin rows directly.
-    galerkin = accel_galerkin_term(chat, xc, bath_frozen.a, bath_frozen.adot,
-        drop_frozen.beta, drop_frozen.betadot, cm, bl, f, p)
+"""
+    residual(chat, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p) -> Vector
 
-    T = promote_type(eltype(X), Float64)
-    R = Vector{T}(undef, N + 2)
-    for n in 0:N
-        R[n+1] = galerkin[n+1]
+The `N+1` inner Galerkin conditions of design doc eq:summary-galerkin,
+
+    R_n = ∫_{xc}^1 [η(r(x)) - z_cm + z_d(x)] P̃_n(ψ(x)) w(x) dx = 0,   n = 0..N,
+
+at FIXED `xc = cos(θ_c)`. `chat` is the only unknown. This is the sole function meant to
+be wrapped by `ForwardDiff.jacobian`; every affine coefficient is plain `Float64` data
+computed once per step by affine.jl and never differentiated.
+"""
+function residual(chat::AbstractVector, xc, q, kappa::Vector{Float64},
+    alpha::Vector{Float64}, lambda::Vector{Float64}, gam::Vector{Float64},
+    kappa_cm::Float64, mu::Float64, p::Params)
+    x, wq, P, dP, Ptil = q
+    am, beta, zcm, _ = unpack_state(chat, xc, q, kappa, alpha, lambda, gam, kappa_cm, mu, p)
+    xi, r, w = geom_at_nodes(beta, x, P, dP, p.L)
+    T = promote_type(eltype(chat), typeof(xc))
+    R = zeros(T, p.N + 1)
+    @inbounds for i in eachindex(x)
+        eta = zero(T)
+        for m in 0:p.M
+            eta += am[m+1] * besselj0(p.k[m+1] * r[i])
+        end
+        gapterm = (eta - zcm + xi[i] * x[i]) * w[i] * wq[i]
+        for n in 0:p.N
+            R[n+1] += gapterm * Ptil[i][n+1]
+        end
     end
-
-    # tangency residual (eq:tangency-explicit), reusing geometry.jl's theta-based forms
-    rc = forward_map_r(beta, theta_c, L)
-    rth = r_theta(beta, theta_c, L)
-    zdth = zd_theta(beta, theta_c, L)
-    bessel_sum = zero(T)
-    for m in eachindex(am)
-        km = p.k[m]
-        bessel_sum += am[m] * km * besselj1(km * rc)
-    end
-    R[N+2] = -bessel_sum * rth - zdth
-
     return R
 end
 
-"""
-    residual_edge(Y, kappa, alpha, lambda, gam, kappa_cm, mu, bath_frozen, drop_frozen, p) -> Vector
-
-Joint residual with the pressure-vanishing free-boundary condition `p(x_c,τ)=0` used IN
-PLACE OF the position-level tangency row (`eq:tangency-explicit`). Tangency was found
-(2026-07-26/27 session) to be doubly degenerate: `∂_θC` is odd in `θ` and vanishes
-identically at `θ=0` for ANY state (a coordinate-singularity triviality near the axis,
-not an `O(δ²)`-conditioning defect further differentiation removes), and separately it
-depends on `a_m(X)`, whose history-intercept `α_m` never grows because pressure itself
-never got the chance to build it (the `K`/drift issue, `§subsec:accel-open`) — so it was
-ALSO near-zero at moderate `θ_c`, not just as `θ_c→0`. `p(x_c,τ)=0` depends only on `ĉ`
-(this step's genuinely `O(1)`-responsive pressure, confirmed by direct testing of
-`com_force_closed`), sidestepping both failure modes — and is the standard Signorini/
-obstacle-problem complementarity condition for a regular pressure field at a free
-boundary, not an ad hoc substitute.
-
-In the `ψ`-monomial pressure basis, `p(x_c,τ)=ĉ_0` exactly (`ψ(x_c)=0` kills every other
-term), so the condition is simply `ĉ_0≡0` — implemented by removing it from the unknown
-vector rather than adding a new equation: `Y=(ĉ_1,...,ĉ_N,θ_c) ∈ R^{N+1}`, closed by the
-SAME `N+1` accel-level Galerkin rows `residual` already computes (the tangency row is
-dropped entirely, not replaced one-for-one).
-
-Confirmed empirically to escape the universal collapse-to-`θ_c=0` failure that the
-tangency-based joint solve exhibited from every tested seed: different seeds now
-converge to different, genuinely nonzero `θ_c`, tracking the seed (multiple roots exist,
-consistent with the design doc's own disclosed `J0`-multi-rootedness risk — a real but
-much more tractable concern than universal collapse, addressed the same way as any
-multi-rooted Newton problem, by warm-starting from the previous converged step).
-"""
-function residual_edge(Y::AbstractVector, kappa::Vector{Float64}, alpha::Vector{Float64},
-    lambda::Vector{Float64}, gam::Vector{Float64}, kappa_cm::Float64, mu::Float64,
-    bath_frozen::BathModeState, drop_frozen::DropModeState, p::Params)
-    N = p.N
-    T = eltype(Y)
-    chat = Vector{T}(undef, N + 1)
-    chat[1] = zero(T)
-    for n in 1:N
-        chat[n+1] = Y[n]
+"""`C(θ,τ) = η(r(θ,τ),τ) - z_cm(τ) + z_d(θ,τ)` (design doc eq:pointwise-residual-sec3).
+Positive means the surfaces interpenetrate."""
+function C_at_theta(am::AbstractVector, beta::AbstractVector, zcm, theta, p::Params)
+    r = forward_map_r(beta, theta, p.L)
+    eta = zero(promote_type(eltype(am), typeof(theta)))
+    for m in 0:p.M
+        eta += am[m+1] * besselj0(p.k[m+1] * r)
     end
-    theta_c = Y[N+1]
-    full = residual(vcat(chat, theta_c), kappa, alpha, lambda, gam, kappa_cm, mu, bath_frozen, drop_frozen, p)
-    return full[1:N+1]
+    return eta - zcm + forward_map_zd(beta, theta, p.L)
 end
 
 """
-    unpack_Y_edge(Y, N) -> X
+    tangency_residual(am, beta, zcm, theta_c, p; h=1e-6) -> value
 
-Expands the reduced edge-condition unknown `Y=(ĉ_1,...,ĉ_N,θ_c)` back to the full
-`X=(ĉ_0≡0,ĉ_1,...,ĉ_N,θ_c)` convention `unpack_state`/postprocessing/reconstruction
-already use, so nothing downstream of the Newton solve needs to know this condition is
-in use.
+`T(θ_c,τ) = ∂C/∂θ` at `θ = θ_c` (design doc eq:tangency-selector), the objective the
+outer selection eq:theta-c-argmin minimises in absolute value. Evaluated by a centred
+difference: `C` is cheap, the outer iteration needs only a handful of evaluations per
+step, and the analytic form would need the `J_1` chain rule through `r(θ)` for no
+accuracy gain at this tolerance.
 """
-function unpack_Y_edge(Y::AbstractVector{Float64}, N::Integer)
-    return [0.0; Y[1:N]; Y[N+1]]
+function tangency_residual(am::AbstractVector, beta::AbstractVector, zcm,
+    theta_c, p::Params; h::Float64=1e-6)
+    return (C_at_theta(am, beta, zcm, theta_c + h, p) -
+            C_at_theta(am, beta, zcm, theta_c - h, p)) / (2h)
 end
 
 """
-    unpack_state(X, kappa, alpha, lambda, gam, kappa_cm, mu, p) -> (am, beta, zcm)
+    check_nonintersect(am, beta, zcm, theta_c, p; nsample=400) -> Bool
 
-Recompute `a_m(X)`, `β_l(X)` (length `M+1`/`L+1`, 1-indexed), and `z_cm(X)` from a
-converged `X` — the same DAG steps `residual` uses internally, exposed separately so
-the timestepper can build the next `Level`'s state without re-deriving them.
+Design doc eq:check-nonintersect as a FEASIBILITY FILTER on candidate `θ_c`, applied
+before the selector is consulted -- exactly as AgueroEtAl2026 set `e(q) = ∞` on
+candidates whose surfaces intersect. `true` iff `C(θ) < 0` throughout `(θ_c, π]`.
 """
-function unpack_state(X::AbstractVector{Float64}, kappa::Vector{Float64}, alpha::Vector{Float64},
-    lambda::Vector{Float64}, gam::Vector{Float64}, kappa_cm::Float64, mu::Float64, p::Params)
-    N = p.N
-    L = p.L
-    chat = @view X[1:N+1]
-    theta_c = X[N+2]
-    xc = cos(theta_c)
-    bl = b_l_all(chat, xc, L)
-    beta = gam .+ lambda .* bl
-    f = com_force_closed(chat, xc, beta, L, p.com_nodes, p.com_weights)
-    zcm = mu + kappa_cm * f
-    cm = c_m_all(chat, xc, beta, L, p.k, p.b, p.gauss_nodes, p.gauss_weights)
-    am = alpha .+ kappa .* cm
-    return am, beta, zcm
+function check_nonintersect(am::AbstractVector, beta::AbstractVector, zcm,
+    theta_c, p::Params; nsample::Int=400)
+    for theta in range(theta_c + 1e-4, π; length=nsample)
+        C_at_theta(am, beta, zcm, theta, p) >= 0 && return false
+    end
+    return true
+end
+
+"""
+    check_monotone_r(beta, xc, L; nsample=200) -> Bool
+
+Design doc eq:check-monotone-r: `∂r/∂x < 0` throughout `[xc,1]`, equivalently
+`r_c < r_M` in AgueroEtAl2026's notation -- the contact patch must not reach the
+droplet's widest point. Without it the substitution `r dr = w dx` used throughout the
+projections is invalid and `w` changes sign.
+"""
+function check_monotone_r(beta::AbstractVector, xc, L::Integer; nsample::Int=200)
+    for x in range(xc, 1 - 1e-8; length=nsample)
+        w_of_x(beta, x, L) <= 0 && return false
+    end
+    return true
+end
+
+"""
+    check_positivity(chat, xc; nsample=200) -> Bool
+
+Design doc eq:check-positivity. NOT imposed and, at large `N`, not a meaningful test:
+the compliance operator is compact, so the pointwise pressure is not a converged output
+of the model and `min p` is measured to diverge with `N`. Retained as a diagnostic for
+small `N`, where the pressure is close to fully resolved.
+"""
+function check_positivity(chat::AbstractVector, xc; nsample::Int=200)
+    for x in range(xc, 1.0; length=nsample)
+        pressure_poly_raw(chat, xc, x) < 0 && return false
+    end
+    return true
 end
