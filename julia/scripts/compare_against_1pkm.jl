@@ -1,4 +1,4 @@
-# Qualitative comparison against Alventosa et al. (2023)'s own 1PKM predictions, digitized
+# COMPARISON (not validation) against Alventosa et al. (2023)'s own 1PKM predictions, digitized
 # from km-dropplet-onto-bath's water_QPExp_DNS_3panel_FFF figure (julia/data/reference/).
 # NOT a bit-for-bit match target (this is a genuinely different closure — see design doc's
 # own framing, §subsec:accel-motivation) — a plausibility check that trends (max
@@ -41,9 +41,10 @@ function main()
     println("We      Y_model   Y_1PKM   alpha_model  alpha_1PKM   tc_model  tc_1PKM")
     for We in We_test
         p = Params(We=We, Bo=Bo, Oh=Oh, M=M, L=L, N=N, b=6.0, h0=3.0, nq=20)
-        times, levels, phases = run_simulation(p; t_end=8.0, dt_init=1e-3, dt_min=1e-9, dt_max=0.05)
+        levels, diag, phases = run_simulation(p; t_end=8.0, dt_init=1e-3, dt_min=1e-9, dt_max=0.05)
+        times = [lv.t for lv in levels]
         Y_model = max_penetration_depth(levels, p.L)
-        tc_model = contact_time(times, phases)
+        tc_model = primary_contact_time(times, phases)
         cor_model = coefficient_of_restitution(times, levels, phases)
 
         i_Y = argmin(abs.(We_maxdef .- We))

@@ -70,9 +70,9 @@
         x, wq = mapped_nodes(xc, p.gauss_nodes, p.gauss_weights)
         P, dP = legendre_tables(x, p.L)
         _, r, w = geom_at_nodes(beta0, x, P, dP, p.L)
-        cm = c_m_all(zeros(p.N + 1), xc, x, wq, r, w, p.k, p.b)
+        cm = c_m_all(zeros(p.N + 1), xc, x, wq, r, w, p.k, p.bath_norm)
         @test all(iszero, cm)
-        cm1 = c_m_all([1.0, 0.0], xc, x, wq, r, w, p.k, p.b)
+        cm1 = c_m_all([1.0, 0.0], xc, x, wq, r, w, p.k, p.bath_norm)
         @test all(isfinite, cm1)          # including m = 0
         @test cm1[1] != 0                 # the piston mode's projection is nonzero...
         kappa, _ = bath_affine(BathModeState(p.M), BathModeState(p.M), p, 0.01, 0.01)
