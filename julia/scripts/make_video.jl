@@ -306,4 +306,6 @@ function main()
     println("wrote $out")
 end
 
-main()
+# Guarded so the rendering primitives above (Canvas, frame, fillbath!, ...) can be reused by
+# `include`-ing this file, e.g. from the tutorial notebook, without triggering a full CLI run.
+abspath(PROGRAM_FILE) == (@__FILE__) && main()
