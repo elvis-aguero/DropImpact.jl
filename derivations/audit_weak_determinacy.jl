@@ -1,4 +1,4 @@
-# AUDIT (part 3): the claims of docs §subsubsec:compliance that an independent review
+# AUDIT (part 3): the claims of paper-formulation.tex ('The compliance operator') that an independent review
 # found unsupported by the earlier audit scripts.  Each block here produces numbers the
 # design doc cites, so that no cited measurement lives only in a scratch file.
 #

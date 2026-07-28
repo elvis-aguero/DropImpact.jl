@@ -3,7 +3,7 @@
 # identified: the compactness of the compliance operator plus the rank law eq:rank-law.
 # Superseded by audit_compliance_operator.jl.
 #
-# It is no longer cited by docs/next-gen-KM-model.tex and its conclusions no longer
+# It is no longer cited by paper-formulation.tex and its conclusions no longer
 # describe the model.  Do not treat a passing run here as support for current theory.
 
 # Diagnosing WHY cond(J) blows up with pressure truncation order N (found in

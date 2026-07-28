@@ -3,13 +3,13 @@
 Manifest.toml
 
 # LaTeX build artifacts
-docs/*.aux
-docs/*.log
-docs/*.out
-docs/*.toc
-docs/*.fls
-docs/*.fdb_latexmk
-docs/*.synctex.gz
+derivations/*.aux
+derivations/*.log
+derivations/*.out
+derivations/*.toc
+derivations/*.fls
+derivations/*.fdb_latexmk
+derivations/*.synctex.gz
 
 # Local, machine-specific Claude Code settings
 .claude/settings.local.json

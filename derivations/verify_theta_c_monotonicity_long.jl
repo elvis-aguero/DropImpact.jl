@@ -1,8 +1,8 @@
 # SUPERSEDED -- RETAINED FOR THE RECORD ONLY.  This script verifies claims about
 # a forward march under the joint crossing closure, REMOVED from the design doc.
-# See docs §subsubsec:contact-angle for the closure that replaces it.
+# See paper-formulation.tex ('The contact angle: an outer selector') for the closure that replaces it.
 #
-# It is no longer cited by docs/next-gen-KM-model.tex and its conclusions no longer
+# It is no longer cited by paper-formulation.tex and its conclusions no longer
 # describe the model.  Do not treat a passing run here as support for current theory.
 
 # Does the current theory's contact-angle closure (eq:theta-c-crossing, C(theta_c,tau)=0,

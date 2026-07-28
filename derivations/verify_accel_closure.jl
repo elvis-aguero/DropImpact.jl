@@ -2,9 +2,9 @@
 # the acceleration-level closure (former Sec. 4), DELETED from the design doc.
 # Its premise -- that the O(delta^2) pressure sensitivity of the position-level closure
 # causes ill-conditioning -- is false: the factor is uniform across the pressure block,
-# and cond(cA)=cond(A).  See docs §subsec:corrections and audit_compliance_operator.jl.
+# and cond(cA)=cond(A).  See provenance.tex Sec. 4 ('Corrections to earlier claims') and audit_compliance_operator.jl.
 #
-# It is no longer cited by docs/next-gen-KM-model.tex and its conclusions no longer
+# It is no longer cited by paper-formulation.tex and its conclusions no longer
 # describe the model.  Do not treat a passing run here as support for current theory.
 
 # Symbolic (CAS-based) verification of design doc Section 4, "An acceleration-level

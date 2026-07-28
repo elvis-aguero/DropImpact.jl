@@ -1,4 +1,4 @@
-# AUDIT: does the model of docs/next-gen-KM-model.tex possess a variational
+# AUDIT: does the model of paper-formulation.tex possess a variational
 # (Signorini / obstacle-problem) structure at the CONTINUOUS level?
 #
 # A Signorini contact problem is well posed iff the compliance operator A mapping

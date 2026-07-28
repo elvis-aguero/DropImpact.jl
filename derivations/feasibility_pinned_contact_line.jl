@@ -53,7 +53,7 @@
 # This script checks: (1) how well the Neumann set represents a pinned profile, analytically;
 # (1b) the retracted artifact; (3) route (A)'s wall leak and (3b) its
 # volume violation; (4) whether eliminating route (B)'s multiplier keeps the bath response
-# AFFINE in the pressure, so that the nested closure of docs/next-gen-KM-model.tex survives.
+# AFFINE in the pressure, so that the nested closure of paper-formulation.tex survives.
 using SpectralKM
 using SpectralKM: bessel_zeros_J1
 using SpecialFunctions

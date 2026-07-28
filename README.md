@@ -35,9 +35,10 @@ search rather than an unknown in a joint algebraic system.
 | `scripts/` | Validation, rendering, and sweep scripts. |
 | `notebooks/tutorial.ipynb` | Guided tour: run an impact, read the diagnostics, compare wall conditions. Dependency-free (SVG figures). |
 | `scripts/sweep.jl` | Parallel parameter sweep; picks its own worker count by measuring, and is resumable. |
-| `docs/next-gen-KM-model.tex` | The model derivation — the physics ground truth for this package. Includes a section recording arguments from earlier revisions that were wrong, and why. |
-| `docs/BouncingDroplets.tex`, `docs/Deformable_impactors.tex` | The two parent papers, for reference and for the claims the derivation makes about them. |
-| `derivations/` | CAS and numerical audit scripts backing specific claims in the `.tex`. Every measurement the document quotes is produced by one of them. |
+| `derivations/paper-formulation.tex` | The model derivation, styled as a submittable methods section — the physics ground truth for this package. |
+| `derivations/provenance.tex` | Maintainer companion to the above: where every measured claim comes from, the wall-condition history, and open questions. References the paper's equation numbers rather than restating them. |
+| `derivations/references/` | The two parent papers (`BouncingDroplets.tex`, `Deformable_impactors.tex`), for reference and for the claims the derivation makes about them. |
+| `derivations/` | CAS and numerical audit scripts backing specific claims in `paper-formulation.tex` and `provenance.tex`. Every measurement either document quotes is produced by one of them. |
 
 ## Setup
 
