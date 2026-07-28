@@ -1,3 +1,46 @@
+\begin{table}
+\centering
+\caption{Notation used in the model formulation.}
+\label{tab:notation}
+\setlength{\tabcolsep}{1pt}
+\small
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}p{0.3\textwidth} c p{0.28\textwidth} c@{}}
+\hline
+Quantity (units) & Symbol & Quantity (units) & Symbol \\ \hline
+Fluid density (kg m$^{-3}$) & $\rho$ & Bath interface height (nondim.) & $\eta(r,\tau)$ \\
+Kinematic viscosity (m$^2$ s$^{-1}$) & $\nu$ & Droplet radius function (nondim.) & $\xi(\theta,\tau)$ \\
+Surface tension (N m$^{-1}$) & $\sigma$ & Velocity potential (nondim.) & $\phi(r,z,\tau)$ \\
+Droplet undeformed radius (m) & $R$ & Contact pressure (nondim.) & $p(x,\tau)$ \\
+Impact speed (m s$^{-1}$) & $V_0$ & Weber number & $\We=\rho RV_0^2/\sigma$ \\
+Gravity (m s$^{-2}$) & $g$ & Bond number & $\Bo=gt_\sigma^2/R$ \\
+Capillary time scale (s) & $t_\sigma=\sqrt{\rho R^3/\sigma}$ & Ohnesorge number & $\Oh=\nu/\sqrt{\sigma R/\rho}$ \\
+Nondimensional time & $\tau=t/t_\sigma$ & Nondimensional bath depth & $h_0$ \\
+Bath cylindrical coordinates & $(r,z)$ & Droplet spherical coordinates & $(\xi,\theta)$ \\
+Bath-mode amplitude & $a_m(\tau)$ & Droplet-mode amplitude & $\beta_l(\tau)$ \\
+Bath wavenumbers ($k_0{=}0$, else $J_1(k_mb){=}0$) & $k_m$ & Bath / droplet truncation orders & $M$, $L$ \\
+Bessel functions / Legendre polynomials & $J_0,J_1$ / $P_l$ & Centre-of-mass height & $z_{cm}(\tau)$ \\
+Bath container radius & $b$ & Polar-angle cosine & $x:=\cos\theta$ \\
+Forward map, droplet surface $\to$ bath frame & $r(\theta,\tau),\,z_d(\theta,\tau)$ & Fourier--Bessel pressure moment & $c_m(\tau)$ \\
+Droplet Legendre pressure moment & $b_l(\tau)$ & Net contact (centre-of-mass) force & $f(\tau)$ \\
+Centre-of-mass velocity & $v$ & Instantaneous contact radius & $r_c(\tau)$ \\
+Pinning line-force multiplier & $\Lambda$ & Pinning constraint & $\mathcal C(a)$ \\
+BDF2 step ratio & $s^k$ & BDF2 coefficients & $\mathfrak a^k,\,b^k,\,c^k$ \\
+Time-step size & $\delta:=\delta_t^k$ & Affine slopes (bath / drop / com) & $\kappa_m,\,\lambda_l,\,\kappa_{cm}$ \\
+History terms (bath / drop / com) & $\alpha_m,\,\gamma_l,\,\mu^{k+1}$ & Contact angle (patch half-angle) & $\theta_c(\tau)$ \\
+Contact-angle cosine & $x_c(\tau):=\cos\theta_c(\tau)$ & Pressure polynomial order & $N$ \\
+Rescaled patch coordinate & $\psi(x,\tau)$ & Shifted-Legendre pressure basis & $\tilde P_n(\psi)$ \\
+Pressure coefficients (inner unknowns) & $\hat c_n(\tau)$ & Cylindrical-measure weight & $w(x,\tau)$ \\
+Quadrature point count & $n_q$ & Bath-projection quadrature kernel & $W_n^{(m)}(\tau)$ \\
+Compliance operator / kernel & $\mathcal A$ / $\mathcal K(x,x')$ & Pointwise contact mismatch & $C(\theta,\tau)$ \\
+History-only mismatch & $C_{\text{free}}$ & Tangency selector residual & $T(\theta_c,\tau)$ \\
+Admissible $\theta_c$ candidate set & $\Theta^{k+1}$ & Droplet widest-point radius & $r_M(\tau)$ \\
+Newton residual & $R_n(\hat c)$ & Newton Jacobian & $J=\partial R/\partial\hat c$ \\
+Levenberg--Marquardt damping & $\mu$ & Newton step increment & $\Delta\hat c$ \\
+\end{tabular*}
+\vspace{2pt}
+{\footnotesize $\mu$ names three distinct quantities by context: the history term in $z_{cm}$'s affine relation (\S\ref{sec:affine}), the dynamic viscosity $\mu=\rho\nu$ used only in \S\ref{sec:drop}'s dimensional derivation, and the Levenberg--Marquardt damping of \S\ref{subsec:newton}. Likewise $b^k,c^k$ (BDF2 coefficients, \S\ref{sec:affine}) share a letter with $b$ (bath radius) and $b_l$, $c_m$ (pressure moments) without being related to either.}
+\end{table}
+
 \section{Problem formulation}
 \label{sec:formulation}
 
@@ -242,7 +285,11 @@ $\mathcal A$ is self-adjoint under the pairing $\langle u,v\rangle_w=\int uv\,w\
 \end{equation}
 in place of the plain spherical projection \eqref{eq:b_l-def}. This is a linearisation choice, not a physical one: it differs from \eqref{eq:b_l-def} only at $O(\theta_c^2)$, since the pressure acts along the true surface normal, which is neither exactly radial nor exactly vertical, and it reduces to \eqref{eq:b_l-def} exactly as $\theta_c\to0$, where $x\to1$ and $w\to1$. With \eqref{eq:b_l-selfadjoint} in force, and with the contact conditions \eqref{eq:galerkin} tested against the same basis that represents the pressure and in the same measure $w\,dx$, the inner Galerkin matrix $\langle\tilde P_n,\mathcal A\tilde P_{n'}\rangle_w$ is symmetric.
 
-The symmetric part of $\mathcal A$ is negative semidefinite rather than definite: it possesses a nontrivial nullspace, so it gives uniqueness of the gap response $\mathcal A p$ but not of $p$ itself. This is consistent with $\mathcal A$ being a compact operator -- an integral operator with a smooth kernel, hence with singular values accumulating at zero -- and it follows that the pointwise pressure is not a quantity this closure resolves at any finite $M,N$: only its low-order moments $c_m,b_l,f$ enter the governing equations \eqref{eq:bath-mode}, \eqref{eq:drop-mode}, \eqref{eq:com}, and only they need be resolved. The resolvable dimension of the pressure -- the number of directions in $\hat c$-space to which the assembled discrete operator responds above numerical roundoff -- depends on both the bath and droplet truncations and on the instantaneous contact angle, and is measurable from the assembled operator's singular values rather than predicted from a formula, since it varies through an impact as the patch grows. The production solver of \S\ref{subsec:newton} does not need this quantity explicitly: it handles the resulting ill-conditioning directly, at every step, rather than by an explicit truncation tied to a resolvable-dimension estimate.
+The symmetric part of $\mathcal A$ is negative semidefinite rather than definite: it possesses a nontrivial nullspace, so it gives uniqueness of the gap response $\mathcal A p$ but not of $p$ itself. The reason is a property of the truncation, not of the continuum operator. As assembled, $\mathcal A$ is a sum of at most $M+(L-1)+1$ separable terms, hence of finite rank; and its \emph{numerical} rank is smaller still, and is set by how many pressure directions the truncated bath and droplet can respond to at all. Restricting the band-limited space $\mathrm{span}\{P_l:l\le L\}$ to the patch $\theta\in[0,\theta_c]$ is a concentration problem of Slepian type, whose eigenvalues sit on a plateau of dimension $O(L\theta_c/\pi)$ and then fall off super-exponentially; the measured spectrum of the assembled operator shows exactly that structure, with a fall of roughly five orders of magnitude per index past the plateau. Writing $n_\ast(M,L,\theta_c)$ for the plateau dimension, measured numerical ranks are $7,9,14$ at $M=L=20,40,80$ (against $M+L=40,80,160$), and $n_\ast$ grows with $\theta_c$ as well as with the truncations.
+
+Two consequences follow, and neither is a statement about compactness. First, the pressure is resolvable pointwise provided $N$ stays inside the budget: refining $N$ at fixed $M,L$ cannot converge, since it adds trial directions the test space cannot see, whereas joint refinement does converge. At $N=12$, $\theta_c=0.3$ and fixed basis, $\mathrm{cond}$ of the inner Galerkin matrix falls from $5.0\times10^{10}$ at $M=L=80$ to $32$ at $M=L=640$, with nothing about the pressure representation changed. Second, the ill-conditioning is not driven by the time step: the plateau dimension is unchanged (at $13$) across $\delta\in[10^{-4},1]$, while $\sigma_1$ itself moves five orders of magnitude over the same range. Indeed at production step sizes the compliance symbol is monotonically \emph{increasing} over the whole retained spectrum -- the bath and droplet respond inertially, with symbols growing like $k$ and $l^2$ respectively, turning over only near $k_\ast=(\mathfrak a/\delta)^{2/3}\approx131$ at $\delta=10^{-3}$, well above $k_M\approx42$ at $M=80$ -- so the retained operator is anti-smoothing rather than smoothing, and first-kind-Fredholm intuition does not describe it.
+
+Practically, then, $N$ should be provisioned against the budget rather than upward for safety margin: over-provisioning $N$ at fixed $M,L$ is what breaks the solve. Only the low-order moments $c_m,b_l,f$ enter the governing equations \eqref{eq:bath-mode}, \eqref{eq:drop-mode}, \eqref{eq:com}, and those remain well conditioned even past the budget, since they pair the pressure against smooth test functions; the pointwise pressure does not, and its positivity check is correspondingly a diagnostic of whether the budget is being respected.
 
 \subsection{The contact angle: an outer selector}
 \label{subsec:contact-angle}
@@ -257,23 +304,34 @@ for the pointwise contact mismatch, required by \eqref{eq:full-contact} to vanis
     \partial_\theta C(0,\tau)\equiv0\text{,}\qquad \partial_\theta C(\pi,\tau)\equiv0
     \label{eq:tangency-degenerate}
 \end{equation}
-identically, for any state whatsoever. Tangency therefore carries no information at the poles: at $\theta_c=0$ the contact patch has shrunk to a point, and tangency cannot constrain an extent that does not exist. The same degeneracy holds in the discrete tangency condition of \cite{AgueroEtAl2026}, for the same reason (axisymmetry forces $\partial_r\eta(0,t)=\partial_rz_d(0,t)=0$ identically), and their treatment is the one adopted here: rather than solving $\partial_\theta C=0$ from a free seed, they evaluate its residual at a discrete set of candidate contact extents bracketing the previous step's, discard those violating non-intersection, and select the surviving candidate that minimises the residual. Tangency is used throughout as a \emph{selector} over candidates, never as an equation solved from an unconstrained starting point.
+identically, for any state whatsoever. Tangency therefore carries no information at the poles: at $\theta_c=0$ the contact patch has shrunk to a point, and tangency cannot constrain an extent that does not exist. The same degeneracy holds in the discrete tangency condition of \cite{AgueroEtAl2026}, for the same reason (axisymmetry forces $\partial_r\eta(0,t)=\partial_rz_d(0,t)=0$ identically). Their remedy is to evaluate the tangency residual at a discrete set of candidate contact extents bracketing the previous step's, discard those violating non-intersection, and select the surviving candidate that minimises the residual, so that tangency acts as a \emph{selector} over candidates rather than an equation solved from an unconstrained seed. The closure adopted here goes one step further and drops tangency from the selection entirely, selecting instead on the admissibility boundary that the non-intersection filter defines; the degeneracy \eqref{eq:tangency-degenerate} is then not merely worked around but absent from the selection criterion.
 
-With $\theta_c$ an outer scalar parameter rather than an unknown carried alongside the pressure, $x_c=\cos\theta_c$ is fixed for each trial value, and \eqref{eq:galerkin} is a square system of $N+1$ equations for the $N+1$ coefficients $\hat c_n$ alone (\S\ref{subsec:newton}); solving it yields a pressure and, through \eqref{eq:summary-states}, a complete state, hence a scalar residual in $\theta_c$ with the pressure already eliminated, reducing the outer problem to one dimension. Two conditions fix $\theta_c$ once the pressure is eliminated. The first is tangency in its selector role,
+With $\theta_c$ an outer scalar parameter rather than an unknown carried alongside the pressure, $x_c=\cos\theta_c$ is fixed for each trial value, and \eqref{eq:galerkin} is a square system of $N+1$ equations for the $N+1$ coefficients $\hat c_n$ alone (\S\ref{subsec:newton}); solving it yields a pressure and, through \eqref{eq:summary-states}, a complete state, hence a scalar residual in $\theta_c$ with the pressure already eliminated, reducing the outer problem to one dimension. The condition that fixes $\theta_c$ once the pressure is eliminated is the admissibility boundary itself. Writing the feasible set of contact extents at a given time level as
 \begin{equation}
-    T(\theta_c,\tau) := \partial_\theta C(\theta,\tau)\big|_{\theta=\theta_c}\text{,}\qquad\text{sought }=0\text{,}
+    \Theta^{k+1} := \big\{\theta:\ \eqref{eq:check-nonintersect}\ \text{and}\ \eqref{eq:check-monotone-r}\ \text{hold at the state the pressure solving \eqref{eq:galerkin} induces at }\theta\big\}\text{,}
+    \label{eq:feasible-set}
+\end{equation}
+the accepted value at each step is its lower edge,
+\begin{equation}
+    \theta_c^{k+1} \;=\; \inf\,\Theta^{k+1}\text{.}
+    \label{eq:theta-c-selector}
+\end{equation}
+This is the operational form of the Signorini complementarity pair, and the evidence for using it in place of a tangency root is direct. Scanning candidates at a real contact step, the non-intersection filter is violated below a threshold and satisfied above it, and the net force $f$ and the pointwise pressure \emph{both} change sign across that same threshold: measured at the first contact step, $f=+3.7\times10^{-3}$ and $\min p=+1.2$ at $\theta_c=0.05$, against $f=-1.7\times10^{-2}$ and $\min p=-3.7$ at $\theta_c=0.075$, with the feasibility boundary between $0.03$ and $0.05$. Above the boundary one is forcing contact where the surfaces would separate, which requires suction; below it they interpenetrate. The physical solution sits exactly \emph{on} the constraint boundary, which is what complementarity says.
+
+Two properties recommend \eqref{eq:theta-c-selector} over the tangency root. First, unlike $T$ it is non-degenerate at onset, so no special first-step rule is needed on its account. Second, it needs no sign change in an oscillatory quantity: $\eta(r(\theta,\tau),\tau)$ is a sum of $J_0$ terms once $k_mr$ is not small, so $\partial_\theta C(\cdot,\tau)$ can change sign more than once on $(0,\pi)$, and a bisection on a tangency sign change is defeated by that non-monotonicity. Existence of at least one admissible $\theta_c$ for a state genuinely in contact follows from the intermediate value theorem applied to $C$: $C(0,\tau)>0$ is the geometric onset-of-contact condition, and $C(\theta,\tau)$ must become negative before $\theta=\pi$, since a positive $C$ throughout would mean the surfaces overlap everywhere.
+
+The tangency residual
+\begin{equation}
+    T(\theta_c,\tau) := \partial_\theta C(\theta,\tau)\big|_{\theta=\theta_c}
     \label{eq:tangency-selector}
 \end{equation}
-evaluated at the state the pressure solving \eqref{eq:galerkin} induces at that $\theta_c$. The second is non-intersection, \eqref{eq:check-nonintersect} below, imposed as a feasibility filter on candidate $\theta_c$ exactly as in \cite{AgueroEtAl2026}: a trial value for which $C(\theta,\tau)\ge0$ for some $\theta>\theta_c$ is discarded before $T$ is consulted. The accepted value at each step is
-\begin{equation}
-    \theta_c^{k+1} \;=\; \operatorname*{arg\,min}_{\theta\in\Theta^{k+1}}\big|T(\theta,\tau^{k+1})\big|\text{,}
-    \label{eq:theta-c-argmin}
-\end{equation}
-with $\Theta^{k+1}$ the set of admissible candidates bracketing the previous step's converged $\theta_c^k$, subject to a continuity bound $|\theta_c^{k+1}-\theta_c^k|$ below a threshold below which the time step is instead reduced and the step retried -- the direct analogue of the contact-radius continuity bound of \cite{AgueroEtAl2026}. The argmin form, rather than a bisection on a sign change, is required because $\eta(r(\theta,\tau),\tau)$ is a sum of oscillatory $J_0$ terms once $k_mr$ is not small, so $T(\cdot,\tau)$ can change sign more than once on $(0,\pi)$; the argmin needs no sign change and so is not defeated by this non-monotonicity. Existence of at least one admissible $\theta_c$ for a state genuinely in contact follows from the intermediate value theorem applied to $C$: $C(0,\tau)>0$ is the geometric onset-of-contact condition, and $C(\theta,\tau)$ must become negative before $\theta=\pi$, since a positive $C$ throughout would mean the surfaces overlap everywhere.
+is retained, evaluated at the accepted state and reported per contact step, but as a \emph{diagnostic} of how nearly the selected extent also satisfies smooth pasting -- not as the quantity selected on. Measured over a full impact at $M=L=60$, its median magnitude falls from $1.6\times10^{-2}$ at $N=3$ to $1.8\times10^{-3}$ at $N=12$, while the fraction of contact steps carrying negative pressure rises from $2\%$ to $90\%$ over the same refinement; the two are therefore not controlled by one another, and $\min p<0$ is diagnostic of the truncation budget of \S\ref{subsec:compliance} rather than of residual tangency.
+
+Implementation note: $\Theta^{k+1}$ is a band, not a half-line. Candidates are infeasible at small $\theta_c$, where the surfaces interpenetrate beyond the edge, and infeasible again at large $\theta_c$, where \eqref{eq:check-monotone-r} fails once the patch reaches the droplet's widest point. Locating $\inf\Theta^{k+1}$ is therefore a bracketed edge search rather than a bisection on a monotone predicate: the search starts at $\theta_c^k$, where continuity says the answer is nearby, walks outward to bracket the lower edge, and then refines it. An earlier version assumed monotonicity and expanded the upper bracket geometrically on failure, which walked past the band and reported no admissible angle at steps where one plainly existed. A continuity bound $|\theta_c^{k+1}-\theta_c^k|$ is retained, below which the time step is reduced and the step retried -- the direct analogue of the contact-radius continuity bound of \cite{AgueroEtAl2026}.
 
 An integrated, rather than pointwise, selector is not used, for a reason established by trying the alternative: a selector minimising a weak residual over the whole patch is biased toward vanishing contact, since shrinking the patch shrinks the domain the residual is measured over, reproducing the degeneracy at onset rather than curing it.
 
-At the first contact step, $\theta_c^k=0$ and \eqref{eq:tangency-degenerate} makes $T\equiv0$ in a neighbourhood of $\theta_c=0$, so the bracket cannot be centred on a previous value. We instead seed the first contact step from the geometric crossing $C(\theta_c,\tau)=0$, which is non-degenerate at onset by the existence argument above, and hand over to \eqref{eq:theta-c-argmin} from the second contact step on.
+At the first contact step there is no previous value to bracket around, so the edge search of \eqref{eq:theta-c-selector} has no starting point. We instead seed the first contact step from the geometric crossing $C(\theta_c,\tau)=0$, which is non-degenerate at onset by the existence argument above, and hand over to \eqref{eq:theta-c-selector} from the second contact step on.
 
 Removing $\theta_c$ from the linear system, rather than solving for it jointly with $\hat c$, is what keeps the closure well conditioned. Every column of the pressure block in a joint system carries a factor of $\kappa_m$, $\kappa_{cm}$ or $\lambda_l$, each $O(\delta^2)$ by \eqref{eq:kappa-general}; a $\theta_c$ column does not, since $\theta_c$ is a raw coordinate that never flows through the BDF2 relations \eqref{eq:kappa-m}--\eqref{eq:kappa-cm}. A joint system therefore mixes columns differing by $O(\delta^2)$ in scale, and its condition number grows without bound as $\delta\to0$. The inner system of the nesting above contains no such column: its condition number is measured at order unity and flat in $\delta$ (see supplementary material), against order $10^{18}$ for the joint alternative at the same state -- a gain obtained by removing one row from the linear system, not by adding machinery.
 
@@ -299,14 +357,14 @@ Positivity of the pressure on the pressed region is neither imposed nor, once $\
 
 The contact problem at time level $\tau^{k+1}$ is solved as a one-dimensional outer iteration over $\theta_c^{k+1}$ wrapping an inner solve for the pressure coefficients $\hat c=(\hat c_0^{k+1},\dots,\hat c_N^{k+1})\in\mathbb R^{N+1}$, with $\theta_c^{k+1}$ held fixed at its current trial value throughout. Every other quantity is an explicit function of $\hat c$, evaluated in the order: $p(x;\hat c)$ from \eqref{eq:pressure-poly}; $b_l(\hat c)$ from \eqref{eq:b_l-selfadjoint}; $\beta_l(\hat c)$ from \eqref{eq:lambda-l}; the geometry $\xi,r,z_d$ from \eqref{eq:eta-xi}--\eqref{eq:forward-map}; $c_m(\hat c)$ and $W_n^{(m)}(\hat c)$ from \eqref{eq:c_m-Wn}; $a_m(\hat c)$ from \eqref{eq:kappa-m}; and $f(\hat c)$, $z_{cm}(\hat c)$ from \eqref{eq:com}, \eqref{eq:kappa-cm}. No step in this chain depends on a quantity not yet evaluated. The inner residual $R_n(\hat c)$ is the left-hand side of \eqref{eq:galerkin} evaluated along this chain. Because every step of the evaluation chain -- polynomial evaluation, Gauss--Legendre quadrature, and $J_0,J_1$ with their derivative recurrences $J_0'=-J_1$, $J_1'=J_0-J_1/x$ -- is an elementary or special-function composition and none is a linear solve, an implicit root, or a search, $R$ is differentiable by direct automatic differentiation of the same computation that evaluates it, at a cost of $N+1$ forward-mode passes; this is how the Jacobian $J:=\partial R/\partial\hat c$ below is obtained, never by a hand-derived formula.
 
-A plain Newton step, $\hat c^{(j+1)}=\hat c^{(j)}-J^{-1}R$, is not robust here, because $\mathrm{cond}(J)$ is not a fixed number: it is order unity at the production truncation ($\mathrm{cond}(J)=3.2$ at $N=3$, $M=L=80$, $\theta_c=0.3$), but grows explosively with $N$ alone, all else held fixed -- $39$ at $N=6$, $4.4\times10^6$ at $N=10$, $2.9\times10^{17}$ at $N=15$ -- the discrete symptom of $\mathcal A$'s compactness (\S\ref{subsec:compliance}): each additional pressure mode is one more direction along which the continuum operator's singular values are already accumulating toward zero, and the discrete Jacobian inherits that decay one mode at a time. A method that is only conditionally robust, safe at small $N$ but not beyond it, invites exactly the failure mode \S\ref{subsec:compliance} warns against: over-provisioning $N$ for safety margin and letting it silently break the solve instead. $\hat c$ is therefore found, at every $N$, by Levenberg--Marquardt-damped least squares,
+A plain Newton step, $\hat c^{(j+1)}=\hat c^{(j)}-J^{-1}R$, is not robust here, because $\mathrm{cond}(J)$ is not a fixed number: it is order unity at the production truncation ($\mathrm{cond}(J)=3.2$ at $N=3$, $M=L=80$, $\theta_c=0.3$), but grows explosively with $N$ alone, all else held fixed -- $39$ at $N=6$, $4.4\times10^6$ at $N=10$, $2.9\times10^{17}$ at $N=15$ -- as $N$ crosses the resolvable-dimension budget $n_\ast(M,L,\theta_c)$ of \S\ref{subsec:compliance}. This growth is a property of the joint truncation, not of the continuum operator, and it is removed by refining $M,L$ alongside $N$ rather than by any change to the pressure representation. A method that is only conditionally robust, safe at small $N$ but not beyond it, invites exactly the failure mode \S\ref{subsec:compliance} warns against: over-provisioning $N$ for safety margin and letting it silently break the solve instead. The damped solve below is therefore a safety net against transient excursions past the budget -- most acutely near onset, where $n_\ast$ shrinks with $\theta_c$ -- and not a substitute for provisioning $N$ correctly. $\hat c$ is therefore found, at every $N$, by Levenberg--Marquardt-damped least squares,
 \begin{equation}
     \big(J^\top J+\mu I\big)\,\Delta\hat c = J^\top R\text{,}\qquad \hat c^{(j+1)}=\hat c^{(j)}-\Delta\hat c\text{,}
     \label{eq:newton-step}
 \end{equation}
 with the damping $\mu$ decreased toward a floor after a residual-reducing step and increased after a failed one, the standard adaptive strategy for a Jacobian that is singular or near-singular at the states of interest rather than merely occasionally so. This trades the quadratic local convergence rate of a plain Newton step for a linear one, in exchange for robustness to the measured near-rank-deficiency; $\mu\to0$ in well-conditioned regions recovers fast convergence there. Convergence tolerances are correspondingly not driven toward machine precision: given the conditioning above, a residual tolerance near $10^{-7}$ is already beyond what double precision can reliably certify, and a stricter one produces spurious non-convergence on otherwise-good solutions, most acutely at contact onset, where the true contact patch has zero width and grows like $\sqrt\tau$ -- a genuine geometric degeneracy there, not a solver failure.
 
-The outer iteration is then a one-dimensional search for $\theta_c^{k+1}$: bracket around $\theta_c^k$ subject to the continuity bound, discard trial values violating \eqref{eq:check-nonintersect}, and evaluate \eqref{eq:theta-c-argmin} among the survivors, reducing $\delta$ and retrying the step if no admissible bracket exists. Each outer evaluation costs one inner Levenberg--Marquardt solve.
+The outer iteration is then a one-dimensional edge search for $\theta_c^{k+1}$: starting from $\theta_c^k$ subject to the continuity bound, walk outward until the feasibility predicates \eqref{eq:check-nonintersect}, \eqref{eq:check-monotone-r} bracket the lower edge of $\Theta^{k+1}$, then refine that edge as in \eqref{eq:theta-c-selector}, reducing $\delta$ and retrying the step if no admissible bracket exists. Each outer evaluation costs one inner Levenberg--Marquardt solve.
 
 \section{Model summary}
 \label{sec:summary}
@@ -349,11 +407,12 @@ For a pinned wall (\S\ref{sec:wall}), $a_m^{k+1}$ is additionally corrected by \
     \label{eq:summary-galerkin}
 \end{equation}
 
-\emph{Outer closure}, selecting $\theta_c^{k+1}$ among candidates admissible under \eqref{eq:check-nonintersect}, \eqref{eq:check-monotone-r} and the continuity bound of \S\ref{subsec:contact-angle}:
+\emph{Outer closure}, selecting $\theta_c^{k+1}$ as the lower edge of the set admissible under \eqref{eq:check-nonintersect}, \eqref{eq:check-monotone-r} and the continuity bound of \S\ref{subsec:contact-angle}:
 \begin{equation}
-    \theta_c^{k+1}=\operatorname*{arg\,min}_{\theta\in\Theta^{k+1}}\big|\partial_\theta C(\theta,\tau^{k+1})\big|\text{,}\qquad
-    C(\theta,\tau) = \eta\big(r(\theta,\tau),\tau\big)-z_{cm}(\tau)+z_d(\theta,\tau)\text{.}
+    \theta_c^{k+1}=\inf\,\Theta^{k+1}\text{,}\qquad
+    C(\theta,\tau) = \eta\big(r(\theta,\tau),\tau\big)-z_{cm}(\tau)+z_d(\theta,\tau)\text{,}
     \label{eq:summary-theta-c}
 \end{equation}
+with $\Theta^{k+1}$ as in \eqref{eq:feasible-set}.
 
 The pressure and the contact extent are both solved for, at different levels rather than jointly, which removes the $\theta_c$ column responsible for the joint system's unbounded conditioning growth as $\delta\to0$ (\S\ref{subsec:contact-angle}): $\eta$, $\xi$ and $p$ remain finite spectral sums throughout, the forward map \eqref{eq:forward-map} is used only forward, and $p\equiv0$ off the contact patch holds exactly. The inner system's own conditioning, at fixed $\theta_c$, is handled by the damped solve of \S\ref{subsec:newton} rather than by an explicit truncation of the pressure order.

@@ -17,8 +17,28 @@ model, not of a basis choice.  Returns (A, w, x, omega) where
 
 `w` is the cylindrical area element weight (r |dr/dx|, so that r dr = w dx),
 `x` the nodes, `omega` the quadrature weights on [x_c, 1].
+
+`wall = :clamped` adds the pinning correction of `apply_clamp`
+(src/residual.jl): with `am_free = alpha + kappa.*cm`, the clamped response is
+`am = am_free + (2/b)*kappa.*Lambda./j0kb`, `Lambda = -sum(am_free.*j0kb)/D`,
+`D = (2/b)*sum(kappa)`. Only the `cm`-linear (pressure-dependent) part of
+`am_free` feeds the compliance operator (`alpha` is background forcing, not a
+function of the current pressure), so substituting `cm[n] = bath_norm[n+1] *
+sum_j p_j J_0(k_n r_j) w_j omega_j` (`c_m_all`, src/bessel_moments.jl) turns the
+correction into a RANK-ONE update of `A_bath`:
+
+    A_bath_clamped[i,j] = A_bath_free[i,j] - (2/(b*D)) * v[i] * u[j] * omega[j] * w[j]
+    v[i] = sum_m (kappa_m/j0kb_m) J_0(k_m r_i)
+    u[j] = sum_m kappa_m * j0kb_m * bath_norm_m * J_0(k_m r_j)
+
+(sum over m=1:M; the m=0 piston has kappa_0=0 and drops out, matching
+`apply_clamp` itself, which sums over the full range but gets zero from that
+term). This is exactly the operator identity the re-audit needs to check: does
+volume-conserving pinning preserve the free-wall operator's self-adjoint,
+positive-definite structure, or does the rank-one correction break it?
 """
-function compliance(p::Params, theta_c::Float64, beta::Vector{Float64}, delta::Float64)
+function compliance(p::Params, theta_c::Float64, beta::Vector{Float64}, delta::Float64;
+    wall::Symbol=:free)
     xc = cos(theta_c)
     s, wq = gauss_legendre_nodes(p.nq)
     x = @. xc + (1 + s) * (1 - xc) / 2
@@ -75,6 +95,20 @@ function compliance(p::Params, theta_c::Float64, beta::Vector{Float64}, delta::F
     for i in 1:n, j in 1:n
         A_com[i, j] = -2 * kappa_cm * omega[j] * w[j]
     end
+
+    if wall === :clamped
+        v = zeros(n); u = zeros(n)
+        for m in 1:p.M
+            km = p.k[m+1]
+            J = [besselj0(km * ri) for ri in r]
+            v .+= (kappa_m[m+1] / p.j0kb[m+1]) .* J
+            u .+= (kappa_m[m+1] * p.j0kb[m+1] * p.bath_norm[m+1]) .* J
+        end
+        D = (2 / p.b) * sum(kappa_m)
+        correction = [-(2 / (p.b * D)) * v[i] * u[j] * omega[j] * w[j] for i in 1:n, j in 1:n]
+        A_bath = A_bath + correction
+    end
+
     return A_bath + A_drop + A_com, A_bath, A_drop, A_com, w, x, omega
 end
 
