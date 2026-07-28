@@ -19,7 +19,7 @@
 # history, decoupled from the pressure.
 
 """
-    c_m_all(chat, xc, x, wq, r, w, k, b) -> Vector
+    c_m_all(chat, xc, x, wq, r, w, k, bath_norm) -> Vector
 
 `c_m(τ)` (design doc eq:c_m-def) for `m = 0..M`, from PRECOMPUTED node data: the
 Fourier-Bessel projection of the contact pressure against `J_0(k_m r)` in the cylindrical
@@ -30,7 +30,7 @@ composed with the geometric map has no elementary antiderivative -- so quadratur
 not a convenience but a necessity (design doc §subsubsec:quadrature).
 """
 function c_m_all(chat::AbstractVector, xc, x::AbstractVector, wq::AbstractVector,
-    r::AbstractVector, w::AbstractVector, k::Vector{Float64}, b::Float64)
+    r::AbstractVector, w::AbstractVector, k::Vector{Float64}, bath_norm::Vector{Float64})
     M = length(k) - 1
     T = promote_type(eltype(chat), typeof(xc), eltype(w))
     out = Vector{T}(undef, M + 1)
@@ -41,7 +41,7 @@ function c_m_all(chat::AbstractVector, xc, x::AbstractVector, wq::AbstractVector
         for i in eachindex(x)
             s += pw[i] * besselj0(km * r[i])
         end
-        out[m+1] = 2 / (b * besselj0(km * b))^2 * s
+        out[m+1] = bath_norm[m+1] * s
     end
     return out
 end

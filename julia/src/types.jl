@@ -37,7 +37,9 @@ struct Params
     b::Float64
     h0::Float64
     nq::Int
+    wall::Symbol
     k::Vector{Float64}
+    bath_norm::Vector{Float64}
     gauss_nodes::Vector{Float64}
     gauss_weights::Vector{Float64}
     com_nodes::Vector{Float64}
@@ -54,12 +56,43 @@ for polynomials up to degree `2nq-1`.
 """
 min_nq_for_exact_com(N::Integer, L::Integer) = cld(N + 2L + 2, 2)
 
-function Params(; We, Bo, Oh, M, L, N, b, h0, nq)
-    kvals = bessel_zeros_J1(M) ./ b
+"""
+    Params(; We, Bo, Oh, M, L, N, b, h0, nq, wall=:free)
+
+`wall` selects the free-surface condition at the container wall `r = b`, which fixes both
+the bath eigenvalues and the Fourier-Bessel weight (design doc eq:bessel-norm):
+
+  `:free`   `∂η/∂r = 0` at `r = b`: a 90-degree contact line free to slide. Eigenvalues are
+            the zeros of `J_1` (plus the `k_0 = 0` piston mode) and the weight is
+            `2/(b J_0(k_m b))²`. This is the configuration of both parent papers and the
+            default.
+
+  `:pinned` `η = 0` at `r = b`: the free surface is pinned at the triple point, with its
+            wall slope free. Eigenvalues are the zeros of `J_0` and the weight is
+            `2/(b J_1(k_m b))²` — which is, incidentally, the expression
+            AlventosaEtAl2023 print for their (free) bath.
+
+KNOWN LIMITATION OF `:pinned`. The velocity potential shares this horizontal basis, since
+`∂η/∂τ = ∂φ/∂z` couples them, and `∂φ/∂r` at the wall goes like `J_1(k_m b)`, which for
+this eigenvalue set is O(1) rather than zero — measured 0.52, 0.34, 0.27, 0.23 for the
+first four modes. The no-flux wall condition is therefore violated at leading order: this
+basis pins the surface exactly at the cost of letting the wall leak. See
+`derivations/feasibility_pinned_contact_line.jl`, which quantifies this and describes the
+alternative (keep the `:free` basis and impose pinning with a Lagrange multiplier, which
+honours no-flux exactly but cannot represent a nonzero wall slope). Neither route is
+without cost; `:pinned` is the one implemented here.
+"""
+function Params(; We, Bo, Oh, M, L, N, b, h0, nq, wall::Symbol=:free)
+    wall in (:free, :pinned) || throw(ArgumentError("wall must be :free or :pinned, got $wall"))
+    kvals = (wall === :free ? bessel_zeros_J1(M) : bessel_zeros_J0(M)) ./ b
+    # Squared-norm weight 2/‖J_0(k_m ·)‖² with ‖·‖² = ∫_0^b J_0(k_m r)² r dr, which equals
+    # (b²/2)J_0(k_m b)² when J_1(k_m b) = 0 and (b²/2)J_1(k_m b)² when J_0(k_m b) = 0.
+    bath_norm = [2 / (b * (wall === :free ? besselj0(k * b) : besselj1(k * b)))^2 for k in kvals]
     nodes, weights = gauss_legendre_nodes(nq)
     com_nq = min_nq_for_exact_com(N, L)
     com_nodes, com_weights = gauss_legendre_nodes(com_nq)
-    return Params(We, Bo, Oh, M, L, N, b, h0, nq, kvals, nodes, weights, com_nodes, com_weights)
+    return Params(We, Bo, Oh, M, L, N, b, h0, nq, wall, kvals, bath_norm,
+                  nodes, weights, com_nodes, com_weights)
 end
 
 """BathModeState: `a[m+1] = a_m(τ)`, `adot[m+1] = ȧ_m(τ)`, m = 0..M."""

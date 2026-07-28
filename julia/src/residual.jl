@@ -62,7 +62,7 @@ function unpack_state(chat::AbstractVector, xc, q, kappa::Vector{Float64},
         done && break
     end
     xi, r, w = geom_at_nodes(beta, x, P, dP, p.L)
-    cm = c_m_all(chat, xc, x, wq, r, w, p.k, p.b)
+    cm = c_m_all(chat, xc, x, wq, r, w, p.k, p.bath_norm)
     am = alpha .+ kappa .* cm
     f = com_force_closed(chat, xc, x, wq, w)
     zcm = mu + kappa_cm * f

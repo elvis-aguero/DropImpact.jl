@@ -105,6 +105,34 @@ drifts with `N` is the maximum contact radius — 0.8192 down to 0.7999,
 monotonically — which is the quantity most sensitive to the pressure profile and
 the one carrying the open discrepancy below.
 
+### Wall condition
+
+`Params(...; wall = :free | :pinned)` selects the free-surface condition at the
+container wall `r = b`.
+
+| | `:free` (default) | `:pinned` |
+|---|---|---|
+| condition at `r = b` | `∂η/∂r = 0` | `η = 0` |
+| contact line | 90°, free to slide | pinned at the triple point |
+| eigenvalues | zeros of `J_1`, plus `k_0 = 0` | zeros of `J_0`, no `k_0 = 0` |
+| Fourier–Bessel weight | `2/(b J_0(k_m b))²` | `2/(b J_1(k_m b))²` |
+
+`:free` is the configuration of both parent papers. `:pinned` implements route (A)
+of `derivations/feasibility_pinned_contact_line.jl`: the surface is pinned exactly
+and by construction — measured `η(b) = 1.1e-15` sustained over a full impact — and
+the wall slope is free, as a real pinned meniscus requires. There is no `k_0 = 0`
+piston mode, which is the physically right exclusion: a pinned surface cannot
+translate uniformly.
+
+**`:pinned` violates no-flux at the wall, by construction and at leading order.**
+The velocity potential shares the horizontal basis (`∂η/∂τ = ∂φ/∂z` couples them)
+and `∂φ/∂r` at the wall goes like `J_1(k_m b)`, which for this eigenvalue set is
+O(1) — 0.52, 0.34, 0.27, 0.23 for the first four modes — not small. The wall leaks.
+This is the price of the route: pinning exact, no-flux broken. The alternative
+(keep the `:free` basis, impose pinning with a Lagrange multiplier) honours
+no-flux exactly but cannot represent a nonzero wall slope, converging at only
+`O(1/M)` there. Both costs are quantified in the feasibility script.
+
 ## Validation
 
 ```bash
