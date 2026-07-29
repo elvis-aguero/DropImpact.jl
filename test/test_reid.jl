@@ -130,13 +130,76 @@
         end
     end
 
-    @testset "high-l modes at large Oh now get Reid, not a Lamb fallback" begin
-        # Before continuation this case fell back to Lamb. It should now be tracked.
-        lam_r, om2_r = drop_viscous_coeffs(16, 0.3, :reid)
-        @test lam_r[17] != 0.3 * (16 - 1) * (2 * 16 + 1)     # NOT the Lamb coefficient
-        lam, om, _ = reid_root_tracked(16, 0.3)
-        @test isapprox(lam_r[17], lam; rtol=1e-10)
-        @test isapprox(om2_r[17], lam^2 + om^2; rtol=1e-10)
+    @testset "faithful two-pole mapping (Vieta) per reid-viscous-closure.tex" begin
+        # Derivation: derivations/reid-viscous-closure.tex, verified symbolically in
+        # derivations/cas_reid_two_pole.py. lambda = -(s1+s2)/2, omega2 = s1*s2.
+
+        @testset "underdamped: Vieta on the conjugate pair" begin
+            for (l, Oh) in ((2, 0.006), (2, 0.3), (8, 0.1), (16, 0.1))
+                lam, om2, info = reid_pole_pair(l, Oh)
+                @test info === :underdamped
+                lr, omr, _ = reid_root_tracked(l, Oh)
+                @test isapprox(lam, lr; rtol=1e-10)
+                @test isapprox(om2, lr^2 + omr^2; rtol=1e-10)
+                # the ODE's own oscillation frequency must return Reid's omega
+                @test isapprox(sqrt(om2 - lam^2), omr; rtol=1e-8)
+            end
+        end
+
+        @testset "overdamped: Vieta on the two SLOWEST real roots, both reproduced" begin
+            for (l, Oh) in ((2, 0.8), (2, 1.0), (2, 3.0), (16, 0.5))
+                lam, om2, info = reid_pole_pair(l, Oh)
+                @test info === :overdamped
+                rs = reid_real_roots(l, Oh)
+                @test length(rs) >= 2
+                g1, g2 = rs[1], rs[2]
+                @test isapprox(lam, (g1 + g2) / 2; rtol=1e-8)
+                @test isapprox(om2, g1 * g2; rtol=1e-8)
+                # BOTH rates come back out of the ODE, which is the whole point:
+                disc = sqrt(lam^2 - om2)
+                @test isapprox(lam - disc, g1; rtol=1e-6)
+                @test isapprox(lam + disc, g2; rtol=1e-6)
+            end
+        end
+
+        @testset "continuation does NOT return the slowest root once merged" begin
+            # The measured failure that motivated reid_real_roots: at l=2, Oh=3 the real
+            # roots are 0.357, 20.97, 89.86 and continuation returns the SECOND.
+            rs = reid_real_roots(2, 3.0)
+            @test length(rs) >= 3
+            @test isapprox(rs[1], 0.357; atol=5e-3)
+            trk, om, _ = reid_root_tracked(2, 3.0)
+            @test om <= 1e-8 * max(trk, 1.0)          # merged
+            @test isapprox(trk, rs[2]; rtol=1e-6)      # the second, not the first
+            @test rs[1] < trk
+        end
+
+        @testset "the slowest rate falls with Oh (viscous drops relax more slowly)" begin
+            slow = [reid_real_roots(2, Oh)[1] for Oh in (0.8, 1.0, 3.0)]
+            @test issorted(slow; rev=true)             # 2.04, 1.28, 0.357
+        end
+
+        @testset "omega2 stays near the inviscid stiffness, and is CONTINUOUS at the merge" begin
+            # Emergent, not imposed: viscosity damps but does not change what restores.
+            om0sq = 2.0 * 1 * 4
+            ratios = Float64[]
+            for Oh in (0.006, 0.3, 0.5, 0.8, 1.0, 3.0)
+                _, om2, _ = reid_pole_pair(2, Oh)
+                push!(ratios, om2 / om0sq)
+                @test 0.85 < om2 / om0sq < 1.02
+            end
+            # No jump across the underdamped -> overdamped transition (0.5 -> 0.8).
+            @test abs(ratios[4] - ratios[3]) < 0.02
+            @test issorted(ratios; rev=true)           # monotone, smooth
+        end
+
+        @testset "the superseded critically-damped choice was badly wrong" begin
+            # It set omega2 = lambda^2 on the tracked (second) root. At l=2, Oh=3 that is
+            # 113.7 against a true stiffness of 7.48 -- an order of magnitude, not a nuance.
+            lam, om2, _ = reid_pole_pair(2, 3.0)
+            @test lam^2 / om2 > 10
+            @test isapprox(om2, 7.48; atol=0.05)
+        end
     end
 
     @testset "selecting :reid does not disturb the published model" begin

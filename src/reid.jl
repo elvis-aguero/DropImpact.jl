@@ -43,9 +43,11 @@
 #      second-order oscillator is exact for FREE decay and an approximation under forcing.
 #      This is the same approximation Molacek & Bush make, and it is a genuine improvement
 #      over Lamb (right eigenvalues instead of asymptotic ones) but not the exact kernel.
-#   2. Once a mode is overdamped the oscillatory pair merges onto the real axis and
-#      "omega_l" ceases to mean a frequency. `reid_root` reports `omega = 0` there and the
-#      caller must treat the mode as non-oscillatory.
+#   2. Once a mode is overdamped the oscillatory pair merges onto the real axis. `reid_root`
+#      reports `omega = 0` there; `reid_pole_pair` then scans the real axis and applies Vieta
+#      to the TWO SLOWEST roots, reproducing both rates exactly. Derivation and the numbers
+#      justifying it: derivations/reid-viscous-closure.tex, verified symbolically in
+#      derivations/cas_reid_two_pole.py.
 
 using SpecialFunctions: besseljx
 
@@ -182,6 +184,97 @@ function reid_root_tracked(l::Integer, Oh::Real; oh_start::Real=1e-4, nsteps::In
 end
 
 """
+    reid_real_roots(l, Oh; smin=1e-5, smax, nscan) -> Vector{Float64}
+
+All real decay rates on `(smin, smax)`, ascending. For real `s > 0` the characteristic
+residual is real (`q = sqrt(s/Oh)` is real, hence so are `j_l` and the ratio `Q`), so roots
+are found by sign changes and bisection. Pole crossings -- `Q` has poles at the zeros of
+`j_l` -- are rejected by requiring the bisected point actually annihilate the residual.
+
+Needed because, once the capillary pair has merged onto the real axis, continuation in `Oh`
+does NOT return the slowest root. Measured at `l = 2`: the real roots at `Oh = 3` are
+`0.357, 20.97, 89.86` and continuation returns `20.97`, the second. The slowest root falls
+with `Oh` (a very viscous drop relaxes ever more slowly), while the tracked one grows.
+"""
+function reid_real_roots(l::Integer, Oh::Real; smin::Real=1e-5,
+                         smax::Real=max(200.0, 40 * Oh * (l - 1) * (2l + 1)),
+                         nscan::Int=40_000)
+    ss = exp.(range(log(smin), log(smax); length=nscan))
+    roots = Float64[]
+    prev = nothing
+    prevs = 0.0
+    for sv in ss
+        v = _reid_resid_real(sv, l, Oh)
+        if v === nothing
+            prev = nothing
+            continue
+        end
+        if prev !== nothing && sign(v) != sign(prev)
+            a, b, fa = prevs, sv, prev
+            for _ in 1:80
+                m = sqrt(a * b)                        # geometric bisection: decades wide
+                fm = _reid_resid_real(m, l, Oh)
+                fm === nothing && break
+                if sign(fm) == sign(fa)
+                    a, fa = m, fm
+                else
+                    b = m
+                end
+            end
+            r = sqrt(a * b)
+            fr = _reid_resid_real(r, l, Oh)
+            # A genuine zero, not a pole crossing.
+            fr !== nothing && abs(fr) < 1e-6 && push!(roots, r)
+        end
+        prev, prevs = v, sv
+    end
+    return sort(roots)
+end
+
+function _reid_resid_real(sv::Real, l::Integer, Oh::Real)
+    v = _reid_resid_safe(complex(float(sv), 0.0), l, Oh)
+    v === nothing && return nothing
+    # Off the real axis by roundoff only; if not, this point is not usable.
+    abs(imag(v)) > 1e-6 * max(abs(real(v)), 1.0) && return nothing
+    return real(v)
+end
+
+"""
+    reid_pole_pair(l, Oh) -> (lambda, omega2, info)
+
+The faithful two-pole coefficients for mode `l`, per
+`derivations/reid-viscous-closure.tex`. Vieta on the two least-damped eigenvalues:
+
+    lambda = -(s1 + s2)/2,     omega2 = s1*s2
+
+which needs no case split. `info` is `:underdamped`, `:overdamped`, or `:failed`.
+
+Underdamped: the pair is `sigma, conj(sigma)`, giving `lambda = Re(sigma)` and
+`omega2 = Re^2 + Im^2`. Overdamped: the pair has merged, so the real axis is scanned and the
+TWO SLOWEST roots are used -- the continued root is not reliably the slowest.
+
+Emergent check: `omega2` should come out near `omega_{l,0}^2 = l(l-1)(l+2)`, since viscosity
+damps but does not change what restores. Measured at `l=2`: `omega2 = 7.487, 7.485, 7.480` at
+`Oh = 0.8, 1.0, 3.0` against `omega_{l,0}^2 = 8`.
+"""
+function reid_pole_pair(l::Integer, Oh::Real)
+    lam, om, resid = reid_root_tracked(l, Oh)
+    (isfinite(lam) && isfinite(resid) && resid < 1e-6 && lam > 0) ||
+        return (NaN, NaN, :failed)
+    # A merged pair leaves a residual imaginary part of order roundoff (measured ~1e-15),
+    # so `om > 0` is NOT the right test -- it silently took the underdamped branch and
+    # reproduced exactly the omega2 = lambda^2 error this function exists to remove. The
+    # comparison must be relative to the decay rate.
+    if om > 1e-8 * max(lam, 1.0)
+        return (lam, lam^2 + om^2, :underdamped)          # Vieta on a conjugate pair
+    end
+    rs = reid_real_roots(l, Oh)
+    length(rs) >= 2 || return (NaN, NaN, :failed)
+    g1, g2 = rs[1], rs[2]                                 # two SLOWEST, ascending
+    return ((g1 + g2) / 2, g1 * g2, :overdamped)          # Vieta on a real pair
+end
+
+"""
     drop_viscous_coeffs(L, Oh, model) -> (lambda, omega2)
 
 Per-mode damping and squared frequency for `l = 0..L`, 1-indexed as `lambda[l+1]`, matching
@@ -198,29 +291,26 @@ function drop_viscous_coeffs(L::Integer, Oh::Real, model::Symbol)
     omega2 = zeros(L + 1)
     fallback = Int[]
     overdamped = Int[]
+    suspect = Tuple{Int,Float64}[]
     for l in 2:L
         lam_lamb = Oh * (l - 1) * (2l + 1)
         om2_lamb = float(l) * (l - 1) * (l + 2)
         if model === :lamb
             lambda[l+1], omega2[l+1] = lam_lamb, om2_lamb
         elseif model === :reid
-            lam, om, resid = reid_root_tracked(l, Oh)
-            # The oscillator beta_ddot + 2*lambda*beta_dot + omega2*beta has roots
-            # -lambda +- i*sqrt(omega2 - lambda^2). To reproduce Reid's eigenvalue
-            # -lam +- i*om we therefore need omega2 = lam^2 + om^2, NOT om^2. (The
-            # published Lamb path has the same O(lambda^2/omega^2) slip, but there it sits
-            # inside its own asymptotic error; here it would be a needless one.)
-            # With continuation there is no need to guard by comparison against Lamb --
-            # which would be wrong anyway past overdamping, where the true branch legitimately
-            # can damp harder than Lamb's asymptotic estimate. Acceptance is on the
-            # characteristic-equation residual alone.
-            ok = isfinite(lam) && isfinite(om) && isfinite(resid) && resid < 1e-6 && lam > 0
-            if ok
-                lambda[l+1], omega2[l+1] = lam, lam^2 + om^2
-                om == 0 && push!(overdamped, l)
-            else
+            lam, om2, info = reid_pole_pair(l, Oh)
+            if info === :failed
                 lambda[l+1], omega2[l+1] = lam_lamb, om2_lamb
                 push!(fallback, l)
+            else
+                lambda[l+1], omega2[l+1] = lam, om2
+                info === :overdamped && push!(overdamped, l)
+                # Emergent sanity check (see reid-viscous-closure.tex sec. 3): viscosity
+                # damps but does not change the restoring force, so omega2 must stay near
+                # omega_{l,0}^2. A large drift means a bad root pair, not physics.
+                if !(0.2 * om2_lamb < om2 < 5 * om2_lamb)
+                    push!(suspect, (l, om2 / om2_lamb))
+                end
             end
         else
             throw(ArgumentError("viscous model must be :lamb or :reid, got $model"))
@@ -238,11 +328,17 @@ function drop_viscous_coeffs(L::Integer, Oh::Real, model::Symbol)
     end
     if !isempty(overdamped)
         @info """
-            Some drop modes are genuinely OVERDAMPED at this Oh (Reid eigenvalue is real).
-            They are represented as critically damped, omega2 = lambda^2, which reproduces
-            the least-damped decay rate as a double root but not the second real root. This
-            is an approximation of the overdamped response, not an error.
+            Some drop modes are OVERDAMPED at this Oh (Reid pair has merged onto the real
+            axis). They use Vieta on the two slowest real roots, which reproduces BOTH rates
+            exactly -- not the critically damped approximation this replaced.
             """ modes=overdamped Oh=Oh
+    end
+    if !isempty(suspect)
+        @warn """
+            omega2 drifted far from the inviscid omega_{l,0}^2 for some modes. Viscosity
+            should not change the restoring force, so this points at a wrong root pair rather
+            than at physics. Reported as (mode, omega2/omega_{l,0}^2).
+            """ suspect=suspect Oh=Oh
     end
     return lambda, omega2
 end
