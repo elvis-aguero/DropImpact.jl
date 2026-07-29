@@ -163,14 +163,17 @@
         end
 
         @testset "continuation does NOT return the slowest root once merged" begin
-            # The measured failure that motivated reid_real_roots: at l=2, Oh=3 the real
-            # roots are 0.357, 20.97, 89.86 and continuation returns the SECOND.
+            # reid_real_roots returns ONLY the dominant pair (bounded by the first
+            # singularity), so exactly 2 once merged. The failure this documents: at
+            # l=2, Oh=3 the dominant pair is (0.357, 20.97) and continuation returns the
+            # SECOND, so it must not be used alone.
             rs = reid_real_roots(2, 3.0)
-            @test length(rs) >= 3
-            @test isapprox(rs[1], 0.357; atol=5e-3)
+            @test length(rs) == 2
+            @test isapprox(rs[1], 0.3568; atol=1e-3)
+            @test isapprox(rs[2], 20.9668; atol=1e-3)
             trk, om, _ = reid_root_tracked(2, 3.0)
-            @test om <= 1e-8 * max(trk, 1.0)          # merged
-            @test isapprox(trk, rs[2]; rtol=1e-6)      # the second, not the first
+            @test om <= 1e-8 * max(trk, 1.0)           # merged
+            @test isapprox(trk, rs[2]; rtol=1e-6)       # the second, not the first
             @test rs[1] < trk
         end
 
@@ -199,6 +202,79 @@
             lam, om2, _ = reid_pole_pair(2, 3.0)
             @test lam^2 / om2 > 10
             @test isapprox(om2, 7.48; atol=0.05)
+        end
+    end
+
+    @testset "STRICTNESS: numerics that must not silently degrade" begin
+        # Motivation: Bessel evaluation misbehaves at the arguments this problem needs, and a
+        # silent misbehaviour here yields a plausible-looking but wrong damping rate. Every
+        # guard below exists because something actually failed during development.
+
+        @testset "the ratio recurrence matches scaled Bessel where that works" begin
+            # Two independent evaluations of Q_l = j_{l+1}/j_l must agree tightly.
+            for (l, q) in ((2, 5.0 + 0.0im), (2, 37.6 + 37.6im), (8, 12.0 + 0.0im),
+                           (16, 21.5 + 0.0im), (120, 131.0 + 0.0im), (60, 3.0 + 80.0im))
+                a = sph_bessel_ratio(l, q)
+                b = besseljx(l + 3 / 2, q) / besseljx(l + 1 / 2, q)
+                @test isapprox(a, b; rtol=1e-11)
+            end
+        end
+
+        @testset "the recurrence survives where plain Bessel does NOT" begin
+            # l=120, q=0.27 underflows besselj to zero and silently produced a spurious
+            # q* = 0.271 during development. The recurrence returns the small-argument limit.
+            v = sph_bessel_ratio(120, 0.27 + 0.0im)
+            @test isfinite(abs(v)) && abs(v) > 0
+            @test isapprox(real(v), 0.27 / (2 * 120 + 3); rtol=1e-2)   # Q_n ~ q/(2n+3)
+        end
+
+        @testset "q*(l) is a true singularity and lies below the first Bessel zero" begin
+            for l in (2, 4, 8, 16, 32, 60, 120)
+                qs = reid_first_singularity(l)
+                jz1 = first_bessel_zero_half(l)
+                @test isfinite(qs) && qs > 0
+                @test qs < jz1                       # must be the FIRST singularity
+                g = qs - 2 * real(sph_bessel_ratio(l, complex(qs, 0.0)))
+                @test abs(g) < 1e-8                  # genuinely a zero of q - 2Q
+            end
+            # Oh-independence: memoised on l alone.
+            @test reid_first_singularity(16) === reid_first_singularity(16)
+        end
+
+        @testset "STRUCTURAL INVARIANT: 0 or exactly 2 roots in the bracket, never 1 or 3" begin
+            # This is the guard against garbage: if the bracket ever admits an odd number of
+            # roots, the dominant pair has been mis-identified and every downstream damping
+            # rate is wrong. Verified over a grid, not a single point.
+            for l in (2, 4, 8, 16, 32), Oh in (0.05, 0.2, 0.5, 0.8, 1.5, 3.0)
+                rs = reid_real_roots(l, Oh)
+                @test length(rs) in (0, 2)
+                # and consistency with the oscillatory/merged classification
+                _, om, _ = reid_root_tracked(l, Oh)
+                merged = om <= 1e-8 * max(reid_root_tracked(l, Oh)[1], 1.0)
+                @test (length(rs) == 2) == merged
+            end
+        end
+
+        @testset "every returned root actually annihilates the characteristic equation" begin
+            for l in (2, 8, 16), Oh in (0.8, 1.5, 3.0)
+                for r in reid_real_roots(l, Oh)
+                    @test abs(reid_char_residual(complex(r, 0.0), l, Oh)) < 1e-6
+                end
+                lam, om, resid = reid_root_tracked(l, Oh)
+                @test resid < 1e-8
+            end
+        end
+
+        @testset "no NaN or non-physical coefficient ever reaches Params" begin
+            # A NaN damping would propagate into the affine map and poison a whole run.
+            for Oh in (0.006, 0.1, 0.5, 1.0, 2.0), L in (8, 24)
+                lam, om2 = drop_viscous_coeffs(L, Oh, :reid)
+                @test all(isfinite, lam) && all(isfinite, om2)
+                for l in 2:L
+                    @test lam[l+1] > 0                      # must damp, not grow
+                    @test om2[l+1] > 0                      # must restore
+                end
+            end
         end
     end
 

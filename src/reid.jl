@@ -49,7 +49,97 @@
 #      justifying it: derivations/reid-viscous-closure.tex, verified symbolically in
 #      derivations/cas_reid_two_pole.py.
 
-using SpecialFunctions: besseljx
+using SpecialFunctions: besselj, besseljx
+
+"""
+    sph_bessel_ratio(l, q) -> Complex
+
+`Q_l(q) = j_{l+1}(q)/j_l(q)` by DOWNWARD recurrence, which never forms `j_l` itself.
+From `j_{l-1} + j_{l+1} = ((2l+1)/q) j_l`, dividing through by `j_l`,
+
+    Q_{l-1} = 1 / ( (2l+1)/q - Q_l ),
+
+seeded at high order with the small-argument limit `Q_n -> q/(2n+3)`.
+
+This replaces a scaled-Bessel evaluation (`besseljx(l+3/2,q)/besseljx(l+1/2,q)`) and is
+strictly more robust: `besselj` OVERFLOWS at small `Oh` (where `|q| ~ 50` with large
+imaginary part) and UNDERFLOWS at large order with small argument -- the latter silently
+produced a spurious `q* = 0.271` at `l = 120` during development. The recurrence agrees with
+the scaled-Bessel reference to 1e-13..1e-16 wherever that reference works at all.
+"""
+function sph_bessel_ratio(l::Integer, q::Number)
+    pad = max(60, l ÷ 2 + ceil(Int, abs(q)))
+    n0 = l + pad + ceil(Int, abs(q))
+    Q = q / (2 * n0 + 3)
+    for n in n0:-1:(l+1)
+        Q = 1 / ((2n + 1) / q - Q)
+    end
+    return Q
+end
+
+"""
+    first_bessel_zero_half(l) -> Float64
+
+First positive zero of `J_{l+1/2}`. Bisected on `besselj` directly, bracketed by
+`[nu, nu + 3 nu^{1/3} + 3]` -- `J_nu` has no zero below its order, and the first zero lies
+within the McMahon offset. Evaluated near `q ~ l`, where `besselj(l+1/2, l) ~ l^{-1/3}` is
+well scaled, so this avoids the underflow that makes an asymptotic-only estimate unsafe.
+"""
+function first_bessel_zero_half(l::Integer)
+    nu = l + 0.5
+    lo, hi = max(nu, 1.0), nu + 3 * cbrt(nu) + 3
+    fa = besselj(nu, lo)
+    for _ in 1:300
+        m = (lo + hi) / 2
+        fm = besselj(nu, m)
+        if sign(fm) == sign(fa)
+            lo, fa = m, fm
+        else
+            hi = m
+        end
+    end
+    return (lo + hi) / 2
+end
+
+const _QSTAR_CACHE = Dict{Int,Float64}()
+
+"""
+    reid_first_singularity(l) -> Float64
+
+`q*(l)`: the first singularity of the characteristic equation's right-hand side, in the
+`q` variable. Depends on `l` ALONE, not on `Oh`, so it is memoised.
+
+Note which singularity this is. The poles of `Q` (zeros of `j_l`) are REMOVABLE in
+
+    rhs = (2(l-1)/q^2) [ l + (l+1)(q - 2l Q)/(q - 2 Q) ],
+
+since `(q-2lQ)/(q-2Q) -> l` as `Q -> infinity`. The true singularities are the zeros of
+`g(q) = q - 2Q(q)`. There is exactly one below the first zero of `j_l`: `g > 0` as `q -> 0+`
+(because `Q ~ q/(2l+3)`, so `g ~ q(1 - 2/(2l+3))`), `g -> -infinity` at that zero, and `g`
+rises to a single maximum in between -- so bisection on `(0, jz_1)` is rigorous.
+
+Measured: `q*/l` = 2.656, 1.972, 1.577, 1.346, 1.209, 1.134, 1.082, 1.051 for
+`l = 2,4,8,16,32,60,120,240`, always just below `jz_1`.
+"""
+function reid_first_singularity(l::Integer)
+    return get!(_QSTAR_CACHE, l) do
+        jz1 = first_bessel_zero_half(l)
+        hi = jz1 * (1 - 1e-10)
+        gg(q) = real(complex(q, 0.0) - 2 * sph_bessel_ratio(l, complex(q, 0.0)))
+        gg(hi) < 0 || return NaN
+        lo, fa = 1e-8, gg(1e-8)
+        for _ in 1:300
+            m = (lo + hi) / 2
+            fm = gg(m)
+            if sign(fm) == sign(fa)
+                lo, fa = m, fm
+            else
+                hi = m
+            end
+        end
+        (lo + hi) / 2
+    end
+end
 
 """
     reid_char_residual(s, l, Oh) -> Complex
@@ -64,7 +154,7 @@ function reid_char_residual(s::Complex, l::Integer, Oh::Real)
     q2 = s / Oh
     q = sqrt(q2)
     a2 = om0 / Oh
-    Qv = besseljx(l + 3 / 2, q) / besseljx(l + 1 / 2, q)
+    Qv = sph_bessel_ratio(l, q)
     rhs = (2 * (l - 1) / q2) * (l + (l + 1) * (q - 2l * Qv) / (q - 2 * Qv))
     return a2^2 / q2^2 + 1 - rhs
 end
@@ -184,25 +274,36 @@ function reid_root_tracked(l::Integer, Oh::Real; oh_start::Real=1e-4, nsteps::In
 end
 
 """
-    reid_real_roots(l, Oh; smin=1e-5, smax, nscan) -> Vector{Float64}
+    reid_real_roots(l, Oh) -> Vector{Float64}
 
-All real decay rates on `(smin, smax)`, ascending. For real `s > 0` the characteristic
-residual is real (`q = sqrt(s/Oh)` is real, hence so are `j_l` and the ratio `Q`), so roots
-are found by sign changes and bisection. Pole crossings -- `Q` has poles at the zeros of
-`j_l` -- are rejected by requiring the bisected point actually annihilate the residual.
+The real decay rates of the DOMINANT pair, ascending, or empty if the mode is still
+oscillatory.
 
-Needed because, once the capillary pair has merged onto the real axis, continuation in `Oh`
-does NOT return the slowest root. Measured at `l = 2`: the real roots at `Oh = 3` are
-`0.357, 20.97, 89.86` and continuation returns `20.97`, the second. The slowest root falls
-with `Oh` (a very viscous drop relaxes ever more slowly), while the tracked one grows.
+This is a bracketed search, not a scan. The theoretical structure (roots interlace with the
+singularity ladder; the two slowest are the fundamental surface mode -- see
+`derivations/reid-viscous-closure.tex`, and the discussion in
+`km-viscous-drop/docs/reid1960_expanded-3.tex`) confines them to a single bounded interval:
+
+    0 < s < s*(l, Oh) = Oh * q*(l)^2,
+
+`q*` being the first singularity from `reid_first_singularity`. Verified over
+`l = 2..32` and `Oh = 0.05..3`: that interval holds EXACTLY 0 real roots while the mode
+oscillates and EXACTLY 2 once the pair has merged -- never 1 or 3. Every further root sits
+just above its own singularity and is not wanted here.
+
+For real `s > 0` the residual is real (`q = sqrt(s/Oh)` real, hence `Q` real), so roots come
+from sign changes plus geometric bisection. An earlier revision scanned 40 000 log-spaced
+points over a guessed range; this needs a few dozen evaluations in one interval whose
+endpoints are known analytically.
 """
-function reid_real_roots(l::Integer, Oh::Real; smin::Real=1e-5,
-                         smax::Real=max(200.0, 40 * Oh * (l - 1) * (2l + 1)),
-                         nscan::Int=40_000)
-    ss = exp.(range(log(smin), log(smax); length=nscan))
+function reid_real_roots(l::Integer, Oh::Real; nsub::Int=400)
+    qs = reid_first_singularity(l)
+    isfinite(qs) || return Float64[]
+    sstar = Oh * qs^2
+    smin = 1e-9 * sstar
+    ss = exp.(range(log(smin), log(sstar * (1 - 1e-9)); length=nsub))
     roots = Float64[]
-    prev = nothing
-    prevs = 0.0
+    prev, prevs = nothing, 0.0
     for sv in ss
         v = _reid_resid_real(sv, l, Oh)
         if v === nothing
@@ -211,8 +312,8 @@ function reid_real_roots(l::Integer, Oh::Real; smin::Real=1e-5,
         end
         if prev !== nothing && sign(v) != sign(prev)
             a, b, fa = prevs, sv, prev
-            for _ in 1:80
-                m = sqrt(a * b)                        # geometric bisection: decades wide
+            for _ in 1:100
+                m = sqrt(a * b)
                 fm = _reid_resid_real(m, l, Oh)
                 fm === nothing && break
                 if sign(fm) == sign(fa)
@@ -223,7 +324,6 @@ function reid_real_roots(l::Integer, Oh::Real; smin::Real=1e-5,
             end
             r = sqrt(a * b)
             fr = _reid_resid_real(r, l, Oh)
-            # A genuine zero, not a pole crossing.
             fr !== nothing && abs(fr) < 1e-6 && push!(roots, r)
         end
         prev, prevs = v, sv

@@ -21,6 +21,7 @@ include("postprocessing.jl")
 export Params, Level, SimHistory, Phase, FreeFlight, InContact
 export resolvable_rank_estimate, min_nq_for_exact_com
 export reid_root, reid_root_tracked, reid_real_roots, reid_pole_pair
+export sph_bessel_ratio, reid_first_singularity
 export lamb_eigenvalue, drop_viscous_coeffs
 export legendre_P, legendre_dP, bonnet_H
 export bessel_zeros_J1, bessel_zeros_J0
