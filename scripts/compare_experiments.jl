@@ -4,8 +4,12 @@
 #   (a) LAZY: each (We, Bo, Oh) simulation is cached to data/experiments/sim_cache.csv and
 #       re-used on subsequent runs. Only genuinely new points cost anything, so this is cheap
 #       to re-run after a model change and expensive only once.
-#   (b) OVERLAY: coefficient of restitution against We, experiments and simulation together,
-#       written as a standalone SVG (no plotting dependency).
+#   (b) OVERLAY: CONTACT TIME tc/t_sigma against We -- the target variable -- with the
+#       experimental error bars, plus CoR as a secondary panel. Standalone SVG, no plotting dep.
+#
+# THIS SCRIPT IS NOT RUN AUTOMATICALLY AND MUST NOT BE RUN ON A LAPTOP CASUALLY. Each new
+# (We, Bo, Oh) point is a full impact simulation, ~2 min at the default truncations. The cache
+# exists so the sweep is paid for once, deliberately, on hardware chosen for it.
 #
 # Usage
 #   julia --project=. scripts/compare_experiments.jl              # default sweep
@@ -37,9 +41,10 @@ using Printf
 using Statistics
 
 const ROOT = dirname(@__DIR__)
-const EXP_CSV = joinpath(ROOT, "data", "experiments", "rebound_low_weber.csv")
+const TC_CSV = joinpath(ROOT, "data", "experiments", "contact_time_vs_we.csv")
+const COR_CSV = joinpath(ROOT, "data", "experiments", "cor_vs_we.csv")
 const CACHE = joinpath(ROOT, "data", "experiments", "sim_cache.csv")
-const OUT_SVG = joinpath(ROOT, "data", "experiments", "cor_vs_we.svg")
+const OUT_SVG = joinpath(ROOT, "data", "experiments", "comparison.svg")
 
 # ---------------------------------------------------------------- args
 function getarg(flag, default)
@@ -54,13 +59,18 @@ const VISCOUS = Symbol(getarg("--viscous", "reid"))
 const T_END = parse(Float64, getarg("--tend", "12.0"))
 
 # ---------------------------------------------------------------- experiments
-function load_experiments()
-    raw = readdlm(EXP_CSV, ','; header=true)
+"""
+Read one of the tidy figure-data CSVs, returning only rows from `src` ("experiment", "dns" or
+"km_model"). `value` is the observable column, e.g. "tc_over_tsigma".
+"""
+function load_figure(path, value, src)
+    raw = readdlm(path, ','; header=true)
     data, hdr = raw[1], vec(raw[2])
-    col(name) = findfirst(==(name), hdr)
-    getf(name) = Float64.(data[:, col(name)])
-    return (We=getf("We"), Bo=getf("Bo"), Oh=getf("Oh"),
-            cor=getf("cor"), cor_vv=getf("cor_from_velocities"))
+    col(n) = findfirst(==(n), hdr)
+    keep = findall(i -> String(strip(string(data[i, col("source")]))) == src, axes(data, 1))
+    num(n) = [x isa Number ? Float64(x) : NaN for x in data[keep, col(n)]]
+    return (We=num("We"), val=num(value), val_unc=num("$(value)_unc"),
+            Oh=num("Oh"), Bo=num("Bo"))
 end
 
 # ---------------------------------------------------------------- cache
@@ -93,6 +103,9 @@ function simulate(We, Bo, Oh; viscous=VISCOUS, t_end=T_END)
     ts = [l.t for l in levels]
     cor = coefficient_of_restitution(ts, levels, phases)
     cor === nothing && return nothing
+    # Our times are already nondimensionalised by tau_cap = sqrt(rho R^3/sigma), which is the
+    # t_sigma the experiments use, so contact_time is directly tc/t_sigma. Not rescaled here --
+    # if that identification is ever wrong, every comparison in this script is wrong with it.
     return (cor=cor,
             tc=contact_time(ts, phases),
             pen=max_penetration_depth(levels, p.L))
@@ -100,8 +113,9 @@ end
 
 # ---------------------------------------------------------------- pick the sweep
 """
-Choose `n` experimental points spanning We logarithmically, taking the median Bo/Oh within
-each We bin so the simulated point is representative rather than an outlier.
+Choose `n` points spanning We logarithmically over the EXPERIMENTAL range, taking the median
+Bo/Oh among nearby experimental points so each simulated case is representative of the data it
+will be compared against rather than an outlier.
 """
 function choose_points(exp, n)
     lo, hi = log10(minimum(exp.We)), log10(maximum(exp.We))
@@ -116,124 +130,163 @@ function choose_points(exp, n)
     return pts
 end
 
-# ---------------------------------------------------------------- SVG
-function write_svg(path, exp, sims)
-    W, H, ml, mr, mt, mb = 900, 560, 90, 30, 60, 70
-    pw, ph = W - ml - mr, H - mt - mb
-    xs = log10.(exp.We)
-    allc = vcat(exp.cor, [s.cor for s in sims])
-    x0, x1 = minimum(xs) - 0.05, maximum(xs) + 0.05
-    y0, y1 = 0.0, max(0.55, maximum(allc) * 1.1)
+# ---------------------------------------------------------------- SVG (two panels)
+"""
+Two stacked panels sharing a log-We axis: contact time on top (the target variable, with
+experimental error bars), CoR beneath. Experiment, DNS, the sister repo's KM model, and this
+model are overlaid so that model-vs-model and model-vs-experiment are both visible.
+"""
+function write_svg(path, panels, sims)
+    W, ml, mr, mt, gap, phh, mb = 980, 95, 190, 46, 54, 220, 62
+    H = mt + 2 * phh + gap + mb
+    pw = W - ml - mr
+    allWe = vcat([p.exp.We for p in panels]..., [s.We for s in sims])
+    x0, x1 = log10(minimum(allWe)) - 0.05, log10(maximum(allWe)) + 0.05
     px(x) = ml + (log10(x) - x0) / (x1 - x0) * pw
-    py(y) = mt + (1 - (y - y0) / (y1 - y0)) * ph
     io = IOBuffer()
     println(io, """<svg xmlns="http://www.w3.org/2000/svg" width="$W" height="$H" font-family="Helvetica,Arial,sans-serif">""")
     println(io, """<rect width="$W" height="$H" fill="white"/>""")
-    println(io, """<rect x="$ml" y="$mt" width="$pw" height="$ph" fill="none" stroke="#333"/>""")
-    # gridlines / ticks
-    for e in ceil(Int, x0):floor(Int, x1)
-        x = px(10.0^e)
-        println(io, """<line x1="$x" y1="$mt" x2="$x" y2="$(mt+ph)" stroke="#eee"/>""")
-        println(io, """<text x="$x" y="$(mt+ph+22)" font-size="13" text-anchor="middle">10<tspan font-size="9" dy="-5">$e</tspan></text>""")
+    println(io, """<text x="$ml" y="26" font-size="15" font-weight="bold">SpectralKM vs Alventosa et al. (2023): experiment, DNS, KM model  [viscous = $(VISCOUS)]</text>""")
+
+    for (k, P) in enumerate(panels)
+        top = mt + (k - 1) * (phh + gap)
+        vals = vcat(P.exp.val, P.dns.val, P.km.val, [P.simval(s) for s in sims])
+        vals = filter(isfinite, vals)
+        y0 = max(0.0, minimum(vals) - 0.08 * (maximum(vals) - minimum(vals)))
+        y1 = maximum(vals) + 0.10 * (maximum(vals) - minimum(vals))
+        py(y) = top + (1 - (y - y0) / (y1 - y0)) * phh
+        println(io, """<rect x="$ml" y="$top" width="$pw" height="$phh" fill="none" stroke="#333"/>""")
+        for e in ceil(Int, x0):floor(Int, x1)
+            x = px(10.0^e)
+            println(io, """<line x1="$x" y1="$top" x2="$x" y2="$(top+phh)" stroke="#eee"/>""")
+            k == length(panels) && println(io, """<text x="$x" y="$(top+phh+22)" font-size="13" text-anchor="middle">10<tspan font-size="9" dy="-5">$e</tspan></text>""")
+        end
+        nt = 5
+        for i in 0:nt
+            yv = y0 + i * (y1 - y0) / nt
+            y = py(yv)
+            println(io, """<line x1="$ml" y1="$y" x2="$(ml+pw)" y2="$y" stroke="#eee"/>""")
+            println(io, """<text x="$(ml-10)" y="$(y+4)" font-size="12" text-anchor="end">$(round(yv,digits=2))</text>""")
+        end
+        # experiment, with error bars where present
+        for i in eachindex(P.exp.We)
+            x, y = px(P.exp.We[i]), py(P.exp.val[i])
+            u = P.exp.val_unc[i]
+            if isfinite(u) && u > 0
+                println(io, """<line x1="$x" y1="$(py(P.exp.val[i]-u))" x2="$x" y2="$(py(P.exp.val[i]+u))" stroke="#9dc3e6" stroke-width="0.7"/>""")
+            end
+            println(io, """<circle cx="$x" cy="$y" r="2.3" fill="#2e75b6" opacity="0.55"/>""")
+        end
+        for i in eachindex(P.km.We)
+            println(io, """<circle cx="$(px(P.km.We[i]))" cy="$(py(P.km.val[i]))" r="1.3" fill="#7f7f7f" opacity="0.45"/>""")
+        end
+        for i in eachindex(P.dns.We)
+            println(io, """<rect x="$(px(P.dns.We[i])-3)" y="$(py(P.dns.val[i])-3)" width="6" height="6" fill="none" stroke="#2e8b57" stroke-width="1.5"/>""")
+        end
+        ss = sort(sims; by=s -> s.We)
+        pts = join(["$(px(s.We)),$(py(P.simval(s)))" for s in ss if isfinite(P.simval(s))], " ")
+        println(io, """<polyline points="$pts" fill="none" stroke="#c0392b" stroke-width="2.4"/>""")
+        for s in ss
+            isfinite(P.simval(s)) || continue
+            println(io, """<circle cx="$(px(s.We))" cy="$(py(P.simval(s)))" r="5.5" fill="#c0392b" stroke="white" stroke-width="1.5"/>""")
+        end
+        cy = top + phh / 2
+        println(io, """<text x="26" y="$cy" font-size="14" text-anchor="middle" transform="rotate(-90 26 $cy)">$(P.label)</text>""")
     end
-    for yv in 0.0:0.1:y1
-        y = py(yv)
-        println(io, """<line x1="$ml" y1="$y" x2="$(ml+pw)" y2="$y" stroke="#eee"/>""")
-        println(io, """<text x="$(ml-10)" y="$(y+4)" font-size="13" text-anchor="end">$(round(yv,digits=1))</text>""")
+    println(io, """<text x="$(ml+pw/2)" y="$(H-16)" font-size="15" text-anchor="middle">We</text>""")
+    lx, ly = ml + pw + 18, mt + 10
+    for (i, (mk, lab)) in enumerate([("exp", "experiment (±unc)"), ("km", "KM model (Alventosa)"),
+                                     ("dns", "DNS"), ("sim", "SpectralKM")])
+        y = ly + (i - 1) * 20
+        if mk == "exp";      println(io, """<circle cx="$lx" cy="$y" r="3.2" fill="#2e75b6"/>""")
+        elseif mk == "km";   println(io, """<circle cx="$lx" cy="$y" r="2" fill="#7f7f7f"/>""")
+        elseif mk == "dns";  println(io, """<rect x="$(lx-3)" y="$(y-3)" width="6" height="6" fill="none" stroke="#2e8b57" stroke-width="1.5"/>""")
+        else                 println(io, """<circle cx="$lx" cy="$y" r="5" fill="#c0392b"/>""")
+        end
+        println(io, """<text x="$(lx+11)" y="$(y+4)" font-size="11.5">$lab</text>""")
     end
-    # experiments: published cor
-    for i in eachindex(xs)
-        println(io, """<circle cx="$(px(exp.We[i]))" cy="$(py(exp.cor[i]))" r="2.4" fill="#4a90d9" opacity="0.55"/>""")
-    end
-    # experiments: raw Vo/Vi, to expose how much the definition matters
-    for i in eachindex(xs)
-        c = exp.cor_vv[i]
-        (0 <= c <= y1) || continue
-        println(io, """<circle cx="$(px(exp.We[i]))" cy="$(py(c))" r="1.6" fill="none" stroke="#bbb" stroke-width="0.7"/>""")
-    end
-    # simulation
-    ss = sort(sims; by=s -> s.We)
-    pts = join(["$(px(s.We)),$(py(s.cor))" for s in ss], " ")
-    println(io, """<polyline points="$pts" fill="none" stroke="#c0392b" stroke-width="2.2"/>""")
-    for s in ss
-        println(io, """<circle cx="$(px(s.We))" cy="$(py(s.cor))" r="6" fill="#c0392b" stroke="white" stroke-width="1.6"/>""")
-    end
-    # labels
-    println(io, """<text x="$(ml+pw/2)" y="$(H-18)" font-size="16" text-anchor="middle">We</text>""")
-    println(io, """<text x="24" y="$(mt+ph/2)" font-size="16" text-anchor="middle" transform="rotate(-90 24 $(mt+ph/2))">coefficient of restitution</text>""")
-    println(io, """<text x="$ml" y="30" font-size="15" font-weight="bold">SpectralKM vs low-Weber rebound experiments (viscous = $(VISCOUS))</text>""")
-    lx, ly = ml + pw - 250, mt + 16
-    println(io, """<circle cx="$lx" cy="$ly" r="4" fill="#4a90d9" opacity="0.7"/><text x="$(lx+12)" y="$(ly+4)" font-size="12">experiment (published cor)</text>""")
-    println(io, """<circle cx="$lx" cy="$(ly+18)" r="3" fill="none" stroke="#bbb"/><text x="$(lx+12)" y="$(ly+22)" font-size="12">experiment (raw Vo/Vi)</text>""")
-    println(io, """<circle cx="$lx" cy="$(ly+36)" r="5" fill="#c0392b"/><text x="$(lx+12)" y="$(ly+40)" font-size="12">SpectralKM</text>""")
     println(io, "</svg>")
     write(path, String(take!(io)))
 end
 
 # ---------------------------------------------------------------- main
-exp = load_experiments()
-@printf("experiments: %d points, We %.4g..%.4g, Bo %.4g..%.4g, Oh %.4g..%.4g\n",
-        length(exp.We), minimum(exp.We), maximum(exp.We),
-        minimum(exp.Bo), maximum(exp.Bo), minimum(exp.Oh), maximum(exp.Oh))
+tc_exp = load_figure(TC_CSV, "tc_over_tsigma", "experiment")
+tc_dns = load_figure(TC_CSV, "tc_over_tsigma", "dns")
+tc_km  = load_figure(TC_CSV, "tc_over_tsigma", "km_model")
+cor_exp = load_figure(COR_CSV, "cor", "experiment")
+cor_dns = load_figure(COR_CSV, "cor", "dns")
+cor_km  = load_figure(COR_CSV, "cor", "km_model")
+
+@printf("TARGET VARIABLE  contact time tc/t_sigma : %d experimental points, We %.4g..%.4g, tc %.3f..%.3f\n",
+        length(tc_exp.We), minimum(tc_exp.We), maximum(tc_exp.We), minimum(tc_exp.val), maximum(tc_exp.val))
+@printf("secondary        CoR                     : %d experimental points\n", length(cor_exp.We))
 
 cache = load_cache()
 @printf("cache: %d entries%s\n", length(cache), FORCE ? " (ignored, --force)" : "")
 
-pts = choose_points(exp, NPOINTS)
-@printf("\nsimulating %d representative points (viscous = %s, t_end = %.1f)\n", length(pts), VISCOUS, T_END)
-@printf("%-4s %-10s %-10s %-10s %-6s %-10s %-10s %-9s %-s\n",
-        "#", "We", "Bo", "Oh", "n_exp", "cor_sim", "t_c", "pen", "source")
-flush(stdout)
+pts = choose_points(tc_exp, NPOINTS)
+nnew = count(pt -> !haskey(cache, cache_key(pt.We, pt.Bo, pt.Oh, VISCOUS)), pts)
+@printf("\n%d representative points, %d already cached, %d to RUN (~2 min each)\n",
+        length(pts), length(pts) - nnew, nnew)
+if nnew > 0 && !("--yes" in ARGS)
+    println("""
+    Refusing to run $nnew new simulations without --yes. Each is a full impact; this is not
+    something to trigger casually on a laptop. Re-invoke with --yes, or on CI, when you mean it.
+    """)
+    exit(0)
+end
 
+@printf("\n%-4s %-10s %-10s %-10s %-6s %-11s %-10s %-9s %-s\n",
+        "#", "We", "Bo", "Oh", "n_exp", "tc/tsigma", "cor", "pen", "source")
+flush(stdout)
 sims = NamedTuple[]
 for (i, pt) in enumerate(pts)
     k = cache_key(pt.We, pt.Bo, pt.Oh, VISCOUS)
     if haskey(cache, k)
-        cor, tc, pen = cache[k]
-        src = "cache"
+        cor, tc, pen = cache[k]; src = "cache"
     else
         r = simulate(pt.We, pt.Bo, pt.Oh)
         if r === nothing
             @printf("%-4d %-10.4g %-10.4g %-10.4g %-6d %-s\n", i, pt.We, pt.Bo, pt.Oh, pt.nexp,
-                    "NO REBOUND (no contact, or still in contact at t_end)")
-            flush(stdout)
-            continue
+                    "NO REBOUND within t_end"); flush(stdout); continue
         end
         cor, tc, pen = r.cor, r.tc, r.pen
-        append_cache(pt.We, pt.Bo, pt.Oh, VISCOUS, cor, tc, pen)
-        src = "ran"
+        append_cache(pt.We, pt.Bo, pt.Oh, VISCOUS, cor, tc, pen); src = "ran"
     end
     push!(sims, (We=pt.We, Bo=pt.Bo, Oh=pt.Oh, cor=cor, tc=tc, pen=pen))
-    @printf("%-4d %-10.4g %-10.4g %-10.4g %-6d %-10.4f %-10.4f %-9.4f %-s\n",
-            i, pt.We, pt.Bo, pt.Oh, pt.nexp, cor, tc, pen, src)
+    @printf("%-4d %-10.4g %-10.4g %-10.4g %-6d %-11.4f %-10.4f %-9.4f %-s\n",
+            i, pt.We, pt.Bo, pt.Oh, pt.nexp, tc, cor, pen, src)
     flush(stdout)
 end
+isempty(sims) && (println("\nnothing simulated; no overlay written."); exit(0))
 
-if isempty(sims)
-    println("\nno simulated points; nothing to overlay.")
-    exit(0)
-end
-
-write_svg(OUT_SVG, exp, sims)
+panels = [(label="tc / tsigma  (TARGET)", exp=tc_exp, dns=tc_dns, km=tc_km, simval=s -> s.tc),
+          (label="coefficient of restitution", exp=cor_exp, dns=cor_dns, km=cor_km, simval=s -> s.cor)]
+write_svg(OUT_SVG, panels, sims)
 @printf("\nwrote %s\n", relpath(OUT_SVG, ROOT))
 
-# residuals against the nearest-in-We experimental band
-println("\nsimulation vs experiment, per We band (experiment = published cor):")
-@printf("%-10s %-12s %-12s %-12s %-s\n", "We", "cor_sim", "cor_exp_med", "cor_exp_iqr", "sim - med")
+println("\nCONTACT TIME residuals vs experiment (median within +-0.15 dex in We):")
+@printf("%-10s %-12s %-12s %-14s %-12s %-s\n", "We", "tc_sim", "tc_exp_med", "tc_exp_iqr", "sim - med", "within unc?")
 for s in sort(sims; by=x -> x.We)
-    sel = findall(j -> abs(log10(exp.We[j]) - log10(s.We)) < 0.15, eachindex(exp.We))
+    sel = findall(j -> abs(log10(tc_exp.We[j]) - log10(s.We)) < 0.15, eachindex(tc_exp.We))
     isempty(sel) && continue
-    m = median(exp.cor[sel])
-    q = quantile(exp.cor[sel], [0.25, 0.75])
-    @printf("%-10.4g %-12.4f %-12.4f %-12s %+.4f\n", s.We, s.cor, m,
-            @sprintf("%.3f-%.3f", q[1], q[2]), s.cor - m)
+    m = median(tc_exp.val[sel]); q = quantile(tc_exp.val[sel], [0.25, 0.75])
+    u = median(filter(isfinite, tc_exp.val_unc[sel]))
+    @printf("%-10.4g %-12.4f %-12.4f %-14s %+-12.4f %-s\n", s.We, s.tc, m,
+            @sprintf("%.3f-%.3f", q[1], q[2]), s.tc - m,
+            (isfinite(u) && abs(s.tc - m) <= u) ? "yes" : "NO")
 end
 
 println("""
 
-CAVEATS, restated because they bound what this plot means:
-  * the experimental `cor` is published as a restitution coefficient but is NOT Vo/Vi, and our
-    simulated value is specifically -V_exit/V_impact. The grey open circles show the raw Vo/Vi
-    for comparison -- where blue and grey diverge, the definition matters more than the model.
-  * `ho_m` is not plotted: its meaning is undocumented and the sister repo does not use it.
+CAVEATS bounding what this shows:
+  * contact time is compared directly: our times are already in units of
+    tau_cap = sqrt(rho R^3 / sigma), taken to be the experiments' t_sigma. If that
+    identification is wrong, every number above is wrong with it.
+  * the CoR panel's experimental values come from the same published figure, but note the
+    separate raw dataset (rebound_low_weber_raw.csv) reports a `cor` that is NOT Vo/Vi, so
+    restitution definitions differ between sources. Contact time has no such ambiguity, which
+    is a further reason to treat it as the target.
+  * max deflection is not compared: the only candidate experimental column (`ho`) has an
+    undocumented meaning and is not used even by the sister repo.
 """)
