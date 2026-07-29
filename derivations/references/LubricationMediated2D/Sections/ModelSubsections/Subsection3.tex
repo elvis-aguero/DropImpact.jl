@@ -1,0 +1,56 @@
+\subsection{Droplet behaviour}
+
+\subsubsection{Droplet trajectory}
+The vertical motion of the droplet can be described using its centre of mass $Z(t)$. We shall ignore the air effects (primarily viscous drag) except for the interaction with the lubrication layer. Taking the mass of the droplet to be given by $\rho_d \pi R_0^2$, where $R_0$ is the undeformed radius of the drop, we write the vertical acceleration of the droplet as 
+
+\begin{equation}\label{eq: vert dyn}
+    \rho_d \pi R^2 \frac{\text{d}^2 Z}{\text{d}t^2} = \int_{-l^*}^{l^*} P dx - \rho_d \pi R^2 g,
+\end{equation}
+where the integral is the force due to the pressure from the thin film region, and $g$ is the gravitational constant.
+
+If the droplet were to be modelled by a non-deformable disk we can take $h = \eta_d - \eta_b = (Z(t)-S(x))-\eta_b(x,t)$, with $u_d|_{\eta_d}=0$, and the system of equations consisting of (\ref{eq: laplace}), (\ref{eq: qp KBC}), (\ref{eq: qp DBC}), (\ref{eq: thin film}), and (\ref{eq: vert dyn}) is now closed.
+
+\subsubsection{Droplet deformation}
+The equations which govern the evolution of drop deformations follow the methodology first used by Lamb \cite{lamb1924hydrodynamics}, and more recently described by Aalilija \textit{et al} \cite{aalilija2020analytical} and Alventosa \textit{et al} \cite{alventosa2023inertio}. 
+We describe the motion of fluid within the droplet in polar coordinates, with origin at the centre of mass of the drop and $\theta =0$ in the negative $z$-direction. The free surface of the droplet at rest lies along $r=R_0$, with small perturbations to this given by $\eta_d(\theta,t)$. 
+
+In order to derive the equations one can re-cast the equations (\ref{eq: laplace})-(\ref{eq: z velocity match}) in polar coordinates, and proceed with a reduction for the viscous boundary layer near $r=R_0$ to obtain quasi-potential boundary conditions corresponding to (\ref{eq: qp KBC}) - (\ref{eq: qp DBC}). The resulting problem to solve is 
+
+\begin{align}
+ \nabla^2 \phi_d &= 0, \quad &r&<R_0 \\
+    \partial_t \phi_d &= -\frac{1}{\rho_d}p_a - \frac{\sigma}{\rho_d} \kappa  - 2\nu_d\partial_r^2 \phi_d, \quad &r&=R_0 \label{eq: drop DBC}\\
+    \partial_t \eta_d &= \partial_r \phi_d + 2 {\nu_d}\left(\frac{1}{r^2} \partial_\theta^2\eta_d - \frac{1}{r^3}\partial_\theta^2 \int \phi_d \;\text{d} t\right), \quad &r&=R_0, \label{eq: drop KBC}
+\end{align}
+where $\kappa = -\frac{1}{R^2_0}\left(\eta_d + \partial_\theta^2 \eta_d\right)$ is the linearized perturbation of curvature in polar coordinates. Solving Laplace's equation and expanding free surface deformations and pressure in terms of Fourier series symmetric about $\theta=0$, we require that
+
+\begin{align}
+    \phi_d(r, \theta, t) &= \sum_{n=2}^\infty a_n(t)r^n cos(n\theta), \\
+    \eta_d(\theta, t) &= \sum_{n=2}^\infty c_n(t) cos(n\theta), \\
+    p_a &= \sum_{n=2}^\infty \hat{p}_n(t) cos(n\theta),
+\end{align}
+
+where the $n=0$ terms are omitted to enforce mass conservation, and the $n=1$ terms are omitted as they correspond to the linearized center of mass evolution. Substitution into the expressions (\ref{eq: drop DBC})-(\ref{eq: drop KBC}) results in
+
+\begin{align}
+    \dot{a}_n R_0^n &= -\frac{1}{\rho_d}\hat{p}_n + \frac{\sigma}{\rho R_0^{2}} \left( 1-n^2\right)c_n - 2\nu_d \frac{1}{R_0^{2}}n(n-1)a_n R_0^n,\\
+    \dot{c}_n &= \frac{1}{R_0} n a_n R_0^{n} + 2\nu_d \left(-\frac{1}{R_0^2}n^2 c_n  + \frac{1}{R_0^{3}} n^2  \int a_n R_0^n  \;\text{d}t\right). 
+\end{align}
+ 
+Considering the leading order balance $\dot{c}_n = \frac{1}{R_0} n a_n R_0^{n}$ into the viscous terms, and eliminating coefficients $a_n$ by differentiating the second equation and using the first equation, results in the evolution equation for the Fourier coefficient of the free surface shape 
+
+\begin{equation}
+    \ddot{c}_n + 2\lambda_n \dot{c}_n + \omega_n^2 c_n = -\frac{n}{\rho_d R_0}\hat{p}_n,
+\end{equation}
+where 
+
+\begin{equation}
+    \lambda_n = \frac{2 \mu_d}{\rho_d R_0^2}n(n-1), \qquad \omega_n^2 = \frac{\sigma_d }{\rho_d R_0^3}n(n^2-1) 
+\end{equation}
+are viscous damping and frequency terms, respectively. We note that these correspond to the values in Aalilija \textit{et al}\cite{aalilija2020analytical} using the energy method of Lamb\cite{lamb1924hydrodynamics}, but were obtained directly from the quasi-potential approximation. The surface tangential velocity which appears in the lubrication equation (\ref{eq: thin film}) can be recovered by the leading order 
+
+\begin{equation}
+    u_d(R_0, \theta, t) = -\sum_{n=2}^\infty \dot{c}_n(t) sin(n\theta).
+\end{equation}
+
+We have now closed the system of equations which describe fully the lubrication-mediated behaviour of a droplet rebounding off a deep liquid bath. Each of the three regions of fluid have been prescribed a governing set of equations, which are all coupled together through the presence of the pressure function $P(x,t)$. We will now present a numerical implementation of the system in Section \ref{sect:Numerics}.
+

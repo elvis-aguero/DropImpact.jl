@@ -1,0 +1,54 @@
+\subsection{Lubricating air layer model}
+
+When the droplet of undisturbed radius $R_0$ is sufficiently far from the bath, the two liquid regions have a negligible effect on each other. However, when the height between the drop and the bath is of $\mathcal{O}(\varepsilon R_0)$, where $\varepsilon \ll 1$, they can start to affect each other and we are able to proceed by considering the air layer and the pressure within as a lubrication region \cite{hicks2013liquid}. 
+
+The geometry of this lubrication region is given by
+\begin{equation*}
+\Omega_{l^*}(t) = \left\{(x,z): x \in [-l^*(t),l^*(t)], z \in [\eta_b(x,t),\eta_d(x,t)] \right\},    
+\end{equation*}
+where $l^*$ is the horizontal location at which the vertical distance between the bath and droplet becomes greater than $\varepsilon R_0$ for some chosen $\varepsilon \ll 1$. In the next section when we consider the evolution of the droplet it will be more appropriate to set $\eta_d = Z(t)-S(x,t)$, where $Z(t)$ is the vertical height of the centre of mass of the drop, and $S(x,t)$ is the shape profile of the lower interface of the droplet relative to that centre of mass. For rigid objects $S$ is assumed to be constant in time. The height of the lubrication layer within its horizontal domain, is given by 
+\begin{equation}
+    h(x,t) = \eta_d - \eta_b.
+\end{equation}
+
+Taking this geometry into consideration, and assuming weak impacts in which the lubrication layer will not deviate substantially from the horizontal, \eqref{eq: mass}-\eqref{eq: mom} can be reduced  with lubrication scaling to
+
+\begin{align}
+    \partial_x u_a + \partial_z w_a &= 0\label{eq: air mass}, \\
+     0 &= -\partial_x p_a + \mu_a \partial_z^2 u_a,\label{eq: uzz} \\
+    0 &= -\partial_z p_a. \label{eq: pz}
+\end{align}
+From equation \eqref{eq: pz}, we see that the pressure within the air layer varies in the horizontal direction only, i.e $p_a = P(x,t)$. At the two air-liquid interfaces we impose velocity matching as in \eqref{eq:VelocityCont}, such that
+
+\begin{equation*}
+    z=\eta_b: \quad u_a = \partial_x \phi, \quad w_a  =\partial_z \phi;  \qquad  \qquad z=\eta_d: \quad
+    u_a = u_d, \quad w_a = w_d,
+\end{equation*}
+where we recall that $(u_d,w_d)$ are the velocity components of the flow in the droplet. Equation \eqref{eq: uzz} can then be solved to determine the form of $u_a$ as a Poiseuille flow within the air layer of the form 
+
+\begin{equation}\label{eq: u_a}
+    u_a = \frac{\partial_x P}{2\mu_a}(z-\eta_b)(z-\eta_d) + \frac{u_d|_{\eta_d}}{\eta_d- \eta_b}(z-\eta_b) + \frac{\partial_x \phi_b|_{\eta_b}}{\eta_b- \eta_d}(z-\eta_d).
+\end{equation}
+
+The lubrication equation results from integrating the conservation of mass equation \eqref{eq: air mass} across the air layer, 
+
+\begin{equation}
+    \int_{\eta_b}^{\eta_d} \partial_x u_a + \partial_z w_a \; \text{d}z = 0.
+\end{equation}
+Using the Leibniz integral rule 
+
+\begin{equation}
+    \partial_x \int_{\eta_b}^{\eta_d} u_a \text{d}z + \left(w_a\Big|_{\eta_d} - u_a \Big|_{\eta_d}\partial_x \eta_d\right)  - \left(w_a\Big|_{\eta_b} - u_a \Big|_{\eta_b} \partial_x \eta_b \right) = 0,
+\end{equation}
+which is a conservation law for the height of the layer, since the first term represents the area flux, and the boundary terms yield, from \eqref{eq: KBC General}, the change in thickness i.e. $\partial_x Q + \partial_t \eta_d  - \partial_t \eta_b = 0$ with a flux from (\ref{eq: u_a})
+
+\begin{equation}
+Q = -\frac{\partial_x P}{12\mu_a} h^3 + \frac{(\partial_x \phi_b|_{\eta_b} + u_d|_{\eta_d})}{2} h~.
+\end{equation}
+Hence the lubrication equation is
+
+\begin{equation}\label{eq: thin film}
+\partial_t h +  \partial_x \left[-\frac{1}{12\mu_a} \partial_x P h^3 + \frac{(\partial_x \phi_b|_{\eta_b} + u_d|_{\eta_d} )}{2} h \right] = 0.
+\end{equation}
+The boundary conditions for this equation are 
+$P=0$ at $x=\pm l^*$.
