@@ -341,3 +341,102 @@
         @test abs(lam_r[3]) > abs(lam_l[3])
     end
 end
+
+@testset "free decay END-TO-END: the time integration reproduces the eigenvalue" begin
+    # The only check that the whole chain is wired correctly:
+    #
+    #   Reid root  ->  (lambda_l, omega2_l)  ->  drop_affine  ->  BDF2 stepping  ->  observed decay
+    #
+    # Everything upstream of this is verified against the characteristic equation, which says
+    # nothing about whether the coefficients actually reach the solver or are used with the
+    # right sign. A unit test on the roots cannot catch a mis-wired affine map; this can.
+    #
+    # Method: excite one mode, evolve with NO contact pressure (b_l = 0, so beta^{k+1} = gam),
+    # then recover the decay rate from successive extrema and the frequency from their spacing.
+
+    """Evolve mode `l` freely and return (measured_lambda, measured_omega)."""
+    function free_decay(p::Params, l::Integer; dt::Float64=2e-4, nsteps::Int=60_000)
+        beta_prev = zeros(p.L + 1); beta_curr = zeros(p.L + 1)
+        bdot_prev = zeros(p.L + 1); bdot_curr = zeros(p.L + 1)
+        beta_curr[l+1] = 1e-3                       # small, to stay linear
+        ts = Float64[]; ys = Float64[]
+        for k in 1:nsteps
+            dcur = DropModeState(copy(beta_curr), copy(bdot_curr))
+            dprv = DropModeState(copy(beta_prev), copy(bdot_prev))
+            _, gam = drop_affine(dcur, dprv, p, dt, dt)
+            beta_new = gam[l+1]                     # b_l = 0: homogeneous update
+            bdot_new = bdf_derivative(beta_new, beta_curr[l+1], beta_prev[l+1], dt, dt)
+            beta_prev, bdot_prev = copy(beta_curr), copy(bdot_curr)
+            beta_curr = zeros(p.L + 1); bdot_curr = zeros(p.L + 1)
+            beta_curr[l+1], bdot_curr[l+1] = beta_new, bdot_new
+            push!(ts, k * dt); push!(ys, beta_new)
+        end
+        # local maxima of |y|, which for a damped oscillation decay as exp(-lambda t)
+        pk_t = Float64[]; pk_y = Float64[]
+        for i in 2:length(ys)-1
+            if abs(ys[i]) > abs(ys[i-1]) && abs(ys[i]) > abs(ys[i+1]) && abs(ys[i]) > 1e-14
+                push!(pk_t, ts[i]); push!(pk_y, abs(ys[i]))
+            end
+        end
+        length(pk_t) < 4 && return (NaN, NaN)
+        # least squares on log|peak| vs t  ->  slope = -lambda
+        n = length(pk_t)
+        mt = sum(pk_t) / n; ly = log.(pk_y); mly = sum(ly) / n
+        slope = sum((pk_t .- mt) .* (ly .- mly)) / sum((pk_t .- mt) .^ 2)
+        # successive |peaks| are half a period apart
+        halfper = sum(diff(pk_t)) / (n - 1)
+        return (-slope, pi / halfper)
+    end
+
+    @testset ":lamb path reproduces its own eigenvalue" begin
+        for (l, Oh) in ((2, 0.006), (2, 0.05), (4, 0.02))
+            p = Params(We=1.0958, Bo=0.017, Oh=Oh, b=6.0, h0=3.0, L=6, viscous=:lamb)
+            lam_m, om_m = free_decay(p, l)
+            lam_e, om_e = lamb_eigenvalue(l, Oh)
+            @test isfinite(lam_m) && isfinite(om_m)
+            @test isapprox(lam_m, lam_e; rtol=0.05)
+            @test isapprox(om_m, om_e; rtol=0.01)
+        end
+    end
+
+    @testset ":reid path reproduces REID's eigenvalue, not Lamb's" begin
+        # The discriminating case: at Oh = 0.05, l = 4 the two models differ by ~14% in decay
+        # rate, so a mis-wired coefficient would show up as agreement with the WRONG one.
+        for (l, Oh) in ((2, 0.006), (2, 0.05), (4, 0.02), (4, 0.05))
+            p = Params(We=1.0958, Bo=0.017, Oh=Oh, b=6.0, h0=3.0, L=6, viscous=:reid)
+            lam_m, om_m = free_decay(p, l)
+            lam_r, om_r, info = reid_pole_pair(l, Oh)
+            @test info === :underdamped
+            om_expect = sqrt(om_r - lam_r^2)          # the ODE's oscillation frequency
+            @test isapprox(lam_m, lam_r; rtol=0.05)
+            @test isapprox(om_m, om_expect; rtol=0.01)
+        end
+    end
+
+    @testset "the two paths are DISTINGUISHABLE end-to-end" begin
+        # If this fails, the test above proves nothing: both models would be indistinguishable
+        # at the measurement precision and agreement with either would be uninformative.
+        l, Oh = 4, 0.05
+        pl = Params(We=1.0958, Bo=0.017, Oh=Oh, b=6.0, h0=3.0, L=6, viscous=:lamb)
+        pr = Params(We=1.0958, Bo=0.017, Oh=Oh, b=6.0, h0=3.0, L=6, viscous=:reid)
+        lam_l, _ = free_decay(pl, l)
+        lam_r, _ = free_decay(pr, l)
+        @test abs(lam_l - lam_r) / lam_r > 0.05        # measured separation exceeds tolerance
+        @test lam_l > lam_r                            # Lamb over-damps, as established
+    end
+
+    @testset "measured decay converges to the eigenvalue as dt -> 0" begin
+        # Guards against a tolerance that passes only by being loose: the discrepancy must
+        # SHRINK with dt, which is what makes 5% an honest bound rather than a fudge.
+        l, Oh = 2, 0.05
+        p = Params(We=1.0958, Bo=0.017, Oh=Oh, b=6.0, h0=3.0, L=6, viscous=:reid)
+        lam_r, _, _ = reid_pole_pair(l, Oh)
+        errs = Float64[]
+        for (dt, ns) in ((8e-4, 15_000), (4e-4, 30_000), (2e-4, 60_000))
+            lam_m, _ = free_decay(p, l; dt=dt, nsteps=ns)
+            push!(errs, abs(lam_m - lam_r) / lam_r)
+        end
+        @test issorted(errs; rev=true)
+        @test errs[end] < errs[1] / 1.5
+    end
+end
