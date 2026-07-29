@@ -228,6 +228,36 @@
             @test isapprox(real(v), 0.27 / (2 * 120 + 3); rtol=1e-2)   # Q_n ~ q/(2n+3)
         end
 
+        @testset "PAD-INDEPENDENCE: the invariant the seed truncation actually rests on" begin
+            # Per derivations/cas_bessel_ratio_seed.py: the seed Q_n ~ q/(2n+3) has RELATIVE
+            # remainder q^2/(4n^2+16n+15), i.e. O(q^2/n^2), which is O(1) when n0 ~ |q|. So the
+            # seed is NOT justified by accuracy. It is justified because the recurrence
+            # contracts relative error by Q_{n-1}Q_n ~ (q/2n)^2 per step. The property to
+            # assert is therefore pad-independence -- asserting seed accuracy would test the
+            # wrong thing, which an earlier revision of this file did.
+            function ratio_pad(l, q, pad)
+                n0 = l + pad + ceil(Int, abs(q))
+                Q = q / (2 * n0 + 3)
+                for n in n0:-1:(l+1)
+                    Q = 1 / ((2n + 1) / q - Q)
+                end
+                Q
+            end
+            for (l, q) in ((2, 5.0 + 0.0im), (2, 37.6 + 37.6im), (16, 21.5 + 0.0im),
+                           (120, 131.0 + 0.0im), (60, 3.0 + 80.0im))
+                shipped = sph_bessel_ratio(l, q)
+                padu = max(60, l ÷ 2 + ceil(Int, abs(q)))
+                # doubling and quadrupling the padding must not move the answer
+                @test isapprox(shipped, ratio_pad(l, q, 2 * padu); rtol=1e-13)
+                @test isapprox(shipped, ratio_pad(l, q, 4 * padu); rtol=1e-13)
+            end
+            # The test has teeth: too little padding IS wrong, so this is discriminating
+            # rather than vacuously satisfied.
+            b = besseljx(2 + 3 / 2, 5.0 + 0.0im) / besseljx(2 + 1 / 2, 5.0 + 0.0im)
+            @test abs(ratio_pad(2, 5.0 + 0.0im, 0) - b) / abs(b) > 1e-6
+            @test abs(sph_bessel_ratio(2, 5.0 + 0.0im) - b) / abs(b) < 1e-14
+        end
+
         @testset "q*(l) is a true singularity and lies below the first Bessel zero" begin
             for l in (2, 4, 8, 16, 32, 60, 120)
                 qs = reid_first_singularity(l)

@@ -127,13 +127,111 @@ For each $l$, at the requested $\Oh$:
         that Lamb is genuinely asymptotic (\texttt{reid\_root\_tracked}).
   \item If $|\operatorname{Im}\sigma|>0$: the pair is $\sigma,\bar\sigma$; apply
         \eqref{eq:case-a}.
-  \item If $\operatorname{Im}\sigma=0$: the pair has merged. Scan the positive real axis for
-        roots (real residual, bisect on sign changes, rejecting pole crossings at zeros of
-        $j_l$), take the \emph{two slowest}, apply \eqref{eq:case-b}. Do \emph{not} rely on
-        the continued root being the slowest.
+  \item If $\operatorname{Im}\sigma=0$: the pair has merged. Find the two real roots by a
+        \emph{bracketed} search, not a scan --- see \S\ref{sec:bracket} --- and apply
+        \eqref{eq:case-b}. Do \emph{not} rely on the continued root being the slowest.
   \item Sanity-check $\omega_l^2$ against $\omega_{l,0}^2$; a large discrepancy indicates a
         bad root pair rather than physics.
 \end{enumerate}
+
+\section{Bracketing the dominant pair}
+\label{sec:bracket}
+
+The real roots need not be hunted for. In
+\begin{equation}
+  \text{rhs} = \frac{2(l-1)}{q^2}\left[l + (l+1)\frac{q-2l\,Q}{q-2Q}\right]
+  \label{eq:rhs}
+\end{equation}
+the poles of $Q$ (the zeros of $j_l$) are \textbf{removable}, since
+$(q-2lQ)/(q-2Q)\to l$ as $Q\to\infty$. The true singularities are the zeros of
+$g(q)=q-2Q(q)$, and the characteristic roots \emph{interlace} with them: measured at $l=2$,
+$\Oh=0.8$, the singularities sit at $s=22.56,\,62.72,\,118.13,\,189.26$ and the roots at
+$23.94,\,63.04,\,118.31,\,189.37$ --- each root just above its own singularity.
+
+The dominant pair lies below the \emph{first} singularity, so the entire search is confined to
+\begin{equation}
+  0 < s < s^\ast(l,\Oh) = \Oh\,q^\ast(l)^2\text{,}
+  \label{eq:bracket}
+\end{equation}
+with $q^\ast(l)$ the first zero of $g$. That zero is uniquely bracketed: $g>0$ as $q\to0^+$
+(since $Q\sim q/(2l+3)$ gives $g\sim q[1-2/(2l+3)]$), $g\to-\infty$ at the first zero
+$jz_1$ of $j_l$, and $g$ has a single maximum between --- so bisection on $(0,jz_1)$ is
+rigorous. Crucially $q^\ast$ depends on $l$ \emph{alone}, not on $\Oh$, so it is computed once
+and memoised; measured $q^\ast/l = 2.656,\,1.972,\,1.577,\,1.346,\,1.209,\,1.134,\,1.082,\,
+1.051$ for $l=2,\dots,240$, always just below $jz_1$.
+
+Verified over $l=2\ldots32$ and $\Oh=0.05\ldots3$ (30 combinations): the interval
+\eqref{eq:bracket} contains \textbf{exactly $0$} real roots while the mode oscillates and
+\textbf{exactly $2$} once the pair has merged --- never $1$ or $3$. That parity is asserted in
+\texttt{test/test\_reid.jl}; an odd count would mean the dominant pair has been
+mis-identified and every downstream damping rate is wrong.
+
+A superseded revision instead scanned $40\,000$ log-spaced points over a guessed range. Anchor
+$jz_1$ to a bisection of \texttt{besselj} rather than to an asymptotic estimate: a McMahon
+first-zero formula overshoots by $0.016$ at $l=2$, which places the bracket on the far side of
+the pole and recovers the \emph{second} singularity ($8.854$) in place of the first ($5.311$).
+
+\section{Evaluating the Bessel ratio, and whether the seed truncation is justified}
+
+The characteristic equation needs only the ratio $Q_l(q)=j_{l+1}(q)/j_l(q)$, never $j_l$
+itself. Forming $j_l$ is in fact unsafe: \texttt{besselj} \emph{overflows} at small $\Oh$,
+where $|q|\sim50$ with a large imaginary part, and \emph{underflows} at large order with small
+argument. The latter is not hypothetical --- during development it silently returned
+$q^\ast(120)=0.271$ against a true $129.86$, precisely the class of failure that yields a
+plausible-looking wrong answer rather than an error.
+
+We therefore use the continued fraction in recurrence form. From
+$j_{n-1}+j_{n+1}=\tfrac{2n+1}{q}j_n$, dividing by $j_n$,
+\begin{equation}
+  Q_{n-1} = \frac{1}{\dfrac{2n+1}{q} - Q_n}\text{,}\qquad
+  Q_{n_0}\;\simeq\;\frac{q}{2n_0+3}\text{,}
+  \label{eq:cf}
+\end{equation}
+recursed downward from $n_0$ to $l$.
+
+\paragraph{The seed is \emph{not} justified by being accurate.} Expanding the exact ratio
+(verified in \texttt{derivations/cas\_bessel\_ratio\_seed.py}),
+\begin{equation}
+  Q_n = \frac{q}{2n+3}\left[1 + \frac{q^2}{4n^2+16n+15} + O(q^4)\right]\text{,}
+  \label{eq:seed-remainder}
+\end{equation}
+so the seed's \emph{relative} remainder is $O(q^2/n^2)$, which is $O(1)$ --- not small ---
+whenever $n_0$ is merely comparable to $|q|$. Taking \eqref{eq:cf}'s seed on its own would be
+an unjustified truncation.
+
+\paragraph{It is justified because the recurrence contracts.} Differentiating \eqref{eq:cf},
+\begin{equation}
+  \frac{\partial Q_{n-1}}{\partial Q_n} = Q_{n-1}^2
+  \quad\Longrightarrow\quad
+  e_{n-1} = Q_{n-1}^2\,e_n
+  \quad\Longrightarrow\quad
+  E_{n-1} = Q_{n-1}Q_n\,E_n
+  \label{eq:contraction}
+\end{equation}
+for absolute error $e$ and relative error $E=e/Q$. With $Q_n\sim q/(2n+3)$ the per-step
+relative factor is $q^2/[(2n+1)(2n+3)]\sim(q/2n)^2\ll1$ as soon as $2n\gg|q|$, and the
+cumulative factor from $n_0$ down to $l+1$ is a product of such terms --- geometric, hence
+accuracy exponential in the padding. This is the Miller premise.
+
+\paragraph{Consequence for the testbed.} Since the justification is contraction rather than
+seed accuracy, the property to assert in the source is \textbf{pad-independence}, not
+agreement of the seed with anything. Measured relative error against a scaled-Bessel reference:
+
+\begin{center}
+\begin{tabular}{llccccc}
+\toprule
+$l$ & $q$ & pad $0$ & $2$ & $8$ & $30$ & $120$ \\
+\midrule
+$2$ & $5$ & $2.7\!\times\!10^{-4}$ & $1.1\!\times\!10^{-6}$ & $1.6\!\times\!10^{-15}$ & $1.2\!\times\!10^{-16}$ & $1.2\!\times\!10^{-16}$ \\
+$2$ & $37.6+37.6i$ & $1.2\!\times\!10^{-16}$ & \multicolumn{4}{c}{(flat)} \\
+$16$ & $21.5$ & $4.8\!\times\!10^{-14}$ & $1.1\!\times\!10^{-15}$ & \multicolumn{3}{c}{(flat)} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+There is a genuinely failing regime at small padding, so the test discriminates. The shipped
+choice $n_0 = l + \max(60,\,l/2+|q|) + |q|$ sits in the plateau at every point checked
+($l$ up to $240$), with doubling the padding changing no digit.
 
 \section{Scope}
 
