@@ -125,6 +125,29 @@ const DEFAULT_NQ = 200
 # OVERPREDICTS the damping by 4.1% at l=2 and 22.9% at l=120 even at production Oh = 0.006,
 # and by 23-97% across l = 2..16 at Oh = 0.1. See src/reid.jl for the table and for what the
 # substitution does and does not capture.
+#
+# READINESS OF :reid AS A FUTURE DEFAULT -- measured, all clear:
+#
+#   live impact    completes at Oh = 0.006, 0.05, 0.2. At production Oh the observables are
+#                  essentially unchanged (CoR identical to 4 digits, t_c 3.8145 -> 3.7942, i.e.
+#                  0.5%), so switching would not materially move published numbers. The
+#                  difference grows with Oh and points the physically right way -- Lamb
+#                  over-damps, so it loses too much energy and UNDER-predicts CoR; :reid
+#                  corrects upward by +0.4% at Oh = 0.05 and +1.7% at Oh = 0.2.
+#   stiffness      omega2/omega_{l,0}^2 runs 0.9992 -> 0.9663 monotonically over l = 2..120 at
+#                  production Oh: 3.4% worst case, all damping positive, all finite.
+#   cost           +1.26 s once per Params at L = 120, against a ~130 s run. The :reid run was
+#                  in fact marginally faster overall.
+#   overdamped     at Oh = 0.2, 80 modes (l = 41..120) take the real-pair Vieta branch with
+#                  lambda up to ~1e3 and the run completes cleanly -- the stiff path works in a
+#                  real simulation, not only in unit tests.
+#
+# WHAT IS STILL NOT ESTABLISHED, and the reason this is not yet the default: "more faithful to
+# linear viscous theory" is NOT "matches experiment better", and only the former is verified.
+# The +1.7% CoR shift at Oh = 0.2 is the one place the change is visible, and it is exactly
+# there that nothing has been compared against DNS or experiment. If that shift moves AWAY from
+# ground truth it would indicate the two-pole forcing gap (or something else) dominating at
+# moderate Oh. A comparison against Alventosa et al. or DNS at Oh >~ 0.05 is the missing piece.
 const DEFAULT_VISCOUS = :lamb
 
 """
