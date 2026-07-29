@@ -29,27 +29,62 @@
         @test errs[end] < 1e-2                  # and is small in the asymptotic regime
     end
 
-    @testset "Lamb OVERPREDICTS damping, increasingly with Oh and with l" begin
-        # This is the substantive physical claim and the motivation for the whole module.
-        # It is asserted only in the UNDERDAMPED regime: once Lamb predicts overdamping
-        # (lambda_Lamb > omega_Lamb) the least-damped Reid branch is no longer the complex
-        # pair, the Lamb-seeded Newton stops following it, and `drop_viscous_coeffs` falls
-        # back to Lamb by design. Measured example of the failure this guards:
-        # Oh=0.3, l=16 returns a purely real root with lambda = 288.6 against Lamb's 148.5.
-        for Oh in (0.006, 0.1, 0.3), l in (2, 4, 8, 16)
-            lam_lamb = Oh * (l - 1) * (2l + 1)
-            om_lamb = sqrt(float(l) * (l - 1) * (l + 2))
-            lam_lamb < om_lamb || continue          # underdamped only
-            lam, _, _ = reid_root(l, Oh)
-            @test lam_lamb > lam
+    @testset "Lamb's eigenvalue error vs Reid, and it FLIPS SIGN" begin
+        # The fair comparison is between EIGENVALUES. Lamb's `c = Oh(l-1)(2l+1)` is an ODE
+        # coefficient; it equals the eigenvalue decay rate only while c < omega_0. Past that
+        # the oscillator's least-damped root is c - sqrt(c^2 - omega_0^2), which COLLAPSES.
+        # Consequence, measured: Lamb over-damps in the underdamped regime and UNDER-damps
+        # once its own coefficient pushes it into (spurious) overdamping.
+        underdamped(l, Oh) = Oh * (l - 1) * (2l + 1) < sqrt(float(l) * (l - 1) * (l + 2))
+
+        @testset "underdamped: Lamb over-damps, worse with Oh and with l" begin
+            for Oh in (0.006, 0.1, 0.3), l in (2, 4, 8, 16)
+                underdamped(l, Oh) || continue
+                le, _ = lamb_eigenvalue(l, Oh)
+                lr, _, _ = reid_root_tracked(l, Oh)
+                @test le > lr
+            end
+            rel(Oh, l) = ((lamb_eigenvalue(l, Oh)[1] - reid_root_tracked(l, Oh)[1])
+                          / reid_root_tracked(l, Oh)[1])
+            @test rel(0.3, 2) > rel(0.1, 2) > rel(0.006, 2)      # 36.7 / 22.9 / 4.1 %
+            @test rel(0.006, 16) > rel(0.006, 8) > rel(0.006, 2) # 11.9 / 9.2 / 4.1 %
+            @test rel(0.006, 16) > 0.05        # not negligible at OUR production Oh
         end
-        # Monotone in Oh at fixed l (measured at l=2: 4.1%, 22.9%, 36.7%).
-        rel(Oh, l) = (Oh * (l - 1) * (2l + 1) - reid_root(l, Oh)[1]) / reid_root(l, Oh)[1]
-        @test rel(0.3, 2) > rel(0.1, 2) > rel(0.006, 2)
-        # Monotone in l at fixed Oh (measured at Oh=0.006: 4.1% -> 11.9% over l=2..16).
-        @test rel(0.006, 16) > rel(0.006, 8) > rel(0.006, 2)
-        # And the magnitude at our own production Oh is not negligible at high l.
-        @test rel(0.006, 16) > 0.05
+
+        @testset "spuriously overdamped: Lamb UNDER-damps" begin
+            # l = 8 and 16 at Oh = 0.3 are past Lamb's threshold; measured -39% and -69%.
+            for l in (8, 16)
+                @test !underdamped(l, 0.3)
+                le, _ = lamb_eigenvalue(l, 0.3)
+                lr, _, _ = reid_root_tracked(l, 0.3)
+                @test le < lr                  # sign of the error has reversed
+            end
+        end
+
+        @testset "Lamb's overdamping onset is itself spurious" begin
+            # At l = 16, Oh = 0.3 Lamb predicts a non-oscillatory mode (omega = 0) while the
+            # tracked Reid eigenvalue still has a nonzero imaginary part (omega ~ 10.5).
+            @test lamb_eigenvalue(16, 0.3)[2] == 0.0
+            _, om_reid, _ = reid_root_tracked(16, 0.3)
+            @test om_reid > 1.0
+        end
+    end
+
+    @testset "continuation tracks the branch a direct solve loses" begin
+        # Direct, Lamb-seeded Newton at l=16, Oh=0.3 lands on a purely real root with
+        # lambda = 288.6; continuation in Oh follows the true branch to lambda = 49.2,
+        # omega = 10.5. This is the case that motivated reid_root_tracked.
+        d_lam, d_om, _ = reid_root(16, 0.3)
+        t_lam, t_om, t_res = reid_root_tracked(16, 0.3)
+        @test t_res < 1e-8
+        @test t_lam < d_lam / 2            # the tracked branch is far less damped
+        @test t_om > 1.0 && d_om < 1e-6    # and still oscillatory, where direct was not
+        # Continuation must NOT perturb the easy cases: identical to roundoff.
+        for (l, Oh) in ((2, 0.006), (16, 0.006), (2, 0.1), (8, 0.1))
+            a, _, _ = reid_root(l, Oh)
+            b, _, _ = reid_root_tracked(l, Oh)
+            @test isapprox(a, b; rtol=1e-10)
+        end
     end
 
     @testset "frequency shift is second-order small at small Oh" begin
@@ -95,13 +130,13 @@
         end
     end
 
-    @testset "overdamped modes fall back to Lamb rather than returning a wrong branch" begin
-        # Oh = 0.3 puts l = 16 past Lamb's overdamping threshold (Oh_crit ~ 0.13 there).
-        lam_r, om2_r = (@test_logs (:warn,) match_mode=:any drop_viscous_coeffs(16, 0.3, :reid))
-        @test lam_r[17] == 0.3 * (16 - 1) * (2 * 16 + 1)      # exactly Lamb
-        @test om2_r[17] == float(16) * 15 * 18
-        # while the low, still-underdamped modes keep their Reid values
-        @test lam_r[3] < 0.3 * (2 - 1) * (2 * 2 + 1)
+    @testset "high-l modes at large Oh now get Reid, not a Lamb fallback" begin
+        # Before continuation this case fell back to Lamb. It should now be tracked.
+        lam_r, om2_r = drop_viscous_coeffs(16, 0.3, :reid)
+        @test lam_r[17] != 0.3 * (16 - 1) * (2 * 16 + 1)     # NOT the Lamb coefficient
+        lam, om, _ = reid_root_tracked(16, 0.3)
+        @test isapprox(lam_r[17], lam; rtol=1e-10)
+        @test isapprox(om2_r[17], lam^2 + om^2; rtol=1e-10)
     end
 
     @testset "selecting :reid does not disturb the published model" begin
