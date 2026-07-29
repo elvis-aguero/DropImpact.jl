@@ -39,6 +39,9 @@ struct Params
     b::Float64
     h0::Float64
     nq::Int
+    viscous::Symbol
+    drop_lambda::Vector{Float64}
+    drop_omega2::Vector{Float64}
     wall::Symbol
     k::Vector{Float64}
     bath_norm::Vector{Float64}
@@ -110,6 +113,19 @@ const DEFAULT_M = 60
 const DEFAULT_L = 120
 const DEFAULT_N = 3
 const DEFAULT_NQ = 200
+
+# Viscous model for the DROP modes.
+#
+#   :lamb -- lambda_l = Oh(l-1)(2l+1), omega_l^2 = l(l-1)(l+2). Lamb's (1881) small-viscosity
+#            asymptotics. The published model, and what DropRebound.jl/DropSolver uses too.
+#   :reid -- exact roots of Reid's (1960) characteristic equation, valid at arbitrary Oh.
+#
+# DEFAULT IS :lamb, so the published model stays reproducible bit-for-bit. Switch to :reid
+# for larger Oh, or when high-l drop damping matters: measured against Reid, Lamb
+# OVERPREDICTS the damping by 4.1% at l=2 and 22.9% at l=120 even at production Oh = 0.006,
+# and by 23-97% across l = 2..16 at Oh = 0.1. See src/reid.jl for the table and for what the
+# substitution does and does not capture.
+const DEFAULT_VISCOUS = :lamb
 
 """
     Params(; We, Bo, Oh, b, h0, wall=:free, M, L, N, nq, check_budget=true)
@@ -187,9 +203,12 @@ the bath eigenvalues and the Fourier-Bessel weight (design doc eq:bessel-norm):
 """
 function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
                 M::Integer=DEFAULT_M, L::Integer=DEFAULT_L, N::Integer=DEFAULT_N,
-                nq::Integer=DEFAULT_NQ, check_budget::Bool=true)
+                nq::Integer=DEFAULT_NQ, viscous::Symbol=DEFAULT_VISCOUS,
+                check_budget::Bool=true)
     wall in (:free, :pinned, :clamped) ||
         throw(ArgumentError("wall must be :free, :pinned or :clamped, got $wall"))
+    viscous in (:lamb, :reid) ||
+        throw(ArgumentError("viscous must be :lamb or :reid, got $viscous"))
 
     # Guard the one failure mode that is silent: N provisioned past the resolvable-rank
     # budget. Past it, the inner solve is ill-conditioned, the reported pointwise pressure
@@ -221,7 +240,9 @@ function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
     nodes, weights = gauss_legendre_nodes(nq)
     com_nq = min_nq_for_exact_com(N, L)
     com_nodes, com_weights = gauss_legendre_nodes(com_nq)
-    return Params(We, Bo, Oh, M, L, N, b, h0, nq, wall, kvals, bath_norm, j0kb,
+    drop_lambda, drop_omega2 = drop_viscous_coeffs(L, Oh, viscous)
+    return Params(We, Bo, Oh, M, L, N, b, h0, nq, viscous, drop_lambda, drop_omega2,
+                  wall, kvals, bath_norm, j0kb,
                   nodes, weights, com_nodes, com_weights)
 end
 

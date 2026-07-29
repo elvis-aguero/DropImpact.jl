@@ -67,8 +67,9 @@ function drop_affine(drop_curr::DropModeState, drop_prev::DropModeState, p::Para
     lambda = zeros(p.L + 1)
     gam = zeros(p.L + 1)
     for l in 2:p.L
-        damp = p.Oh * (2l + 1) * (l - 1)
-        omega2 = l * (l - 1) * (l + 2)
+        # Lamb (:lamb) or exact Reid (:reid) coefficients, precomputed in Params.
+        damp = p.drop_lambda[l+1]
+        omega2 = p.drop_omega2[l+1]
         F = -(2l + 1) * l
         denom = a^2 + 2 * damp * a * dt + dt^2 * omega2
         xk, xkm1 = drop_curr.beta[l+1], drop_prev.beta[l+1]
