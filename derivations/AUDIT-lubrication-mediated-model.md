@@ -1,14 +1,29 @@
 # Audit: Phillips & Milewski (2024) lubrication-mediated model
 
-Physics-faithfulness audit of `references/LubricationMediated.tex` (arXiv:2406.17138),
-ahead of deciding how to incorporate lubrication physics into SpectralKM.
+Physics-faithfulness audit of the lubrication-mediated (LM) model of Phillips, Cimpeanu &
+Milewski, ahead of deciding how to incorporate lubrication physics into SpectralKM. Covers
+both papers: `references/LubricationMediated.tex` (arXiv:2406.17138, 3D, spheres) and
+`references/LubricationMediated2D.tex` + `LubricationMediated2D_Sections/`
+(arXiv:2406.16750, 2D, deformable drops).
 
-**Short verdict: not a toy model, but it does not yet do the thing we need, and its most
-distinctive output sits outside the validity of its own closure.**
+**Short verdict: not a toy model. The one substantive physics objection is rarefaction --
+its most distinctive output sits outside the validity of its own closure.**
 
 The derivation is careful and standard, the one free parameter is justified with a
-sensitivity study and a scaling law, and the sphere results are validated against both DNS
-and experiment. Three limitations matter for us, in descending order of consequence.
+sensitivity study and a scaling law, and results are validated against both DNS and
+experiment.
+
+> **CORRECTION (this section supersedes an earlier draft of this audit).** An earlier version
+> of this document listed "the deformable droplet is derived but never solved" as the leading
+> limitation. **That was wrong**, and the sphere paper itself points to why at `:77`: the
+> deformable-droplet lubrication-mediated model *is* published and DNS-validated in
+> **Phillips, Cimpeanu & Milewski, arXiv:2406.16750**, "Modelling two-dimensional droplet
+> rebound off deep fluid baths" (companion paper, same day), now in `references/` as
+> `LubricationMediated2D.tex` + `LubricationMediated2D_Sections/`. That paper couples bath,
+> air and *deformable* drop, validates against dedicated Navier-Stokes DNS, and additionally
+> computes multiple rebounds and long-time dynamics on a vibrating bath. The remaining gap is
+> therefore much narrower than claimed: only the **3D/axisymmetric deformable numerics** are
+> unrun, and that is a gap in computation, not in derivation or in validation-in-principle.
 
 ---
 
@@ -31,33 +46,33 @@ Air layer treated as a genuine fluid region rather than an assumed pressure shap
 This is the right structure. The pressure is *solved for*, not posited, which is exactly
 what we lack.
 
-## 2. Limitation 1 (most important for us): the deformable droplet is derived but never solved
+## 2. Scope of what has actually been computed (revised)
 
-The title and abstract say "droplet rebounds". Every computation is a **rigid sphere**:
+| paper | geometry | impactor | validated against |
+|---|---|---|---|
+| arXiv:2406.16750 (`LubricationMediated2D`) | 2D / cylindrical | **deformable droplet** | dedicated Navier-Stokes DNS; also multiple rebounds, vibrating bath |
+| arXiv:2406.17138 (`LubricationMediated`) | 3D axisymmetric | rigid sphere | KM model, DNS, experiment (`galeano2021capillary`) |
 
-> `:197` "We now consider the simplest case in which this framework can be used and compared
-> to prior simulations and experiments: the rebound of solid (hydrophobic) spheres. This
-> simplifies considerably the system, **reducing the dimension and eliminating droplet
-> oscillations**."
+So the deformable coupling is done and tested, in 2D. The 3D paper derives the general
+three-dimensional model including the spherical-harmonic droplet equations (`:138-160`) and
+then specialises to spheres for its computations, "eliminating droplet oscillations"
+(`:197`), with 3D drop deformation listed as future work (`:335`).
 
-> `:335` (conclusions) "**Future work include computational studies including drop
-> deformation** and non-axisymmetric impact..."
+**Consequence for us.** Adopting this machinery is not adopting something untested -- the
+deformable lubrication coupling has been exercised against DNS. What is untested is the
+*combination* we want: 3D axisymmetric **and** deformable. Two things to keep in view:
 
-So the spherical-harmonic droplet-deformation equations (`:138-160`) are written down and
-then switched off. Every validation number -- coefficient of restitution, penetration depth,
-pressing time, and the air-layer/pressure figures -- is for a solid sphere.
+* 2D (cylindrical) is not a mild reduction. There is no azimuthal curvature, the radial
+  metric factors are absent from the thin-film operator, and the droplet's modal structure
+  differs (Fourier vs. spherical harmonics), so the 2D validation does not transfer
+  quantitatively to the axisymmetric case -- it establishes that the coupling works, not that
+  our numbers will.
+* Their DNS reference for the sphere case is itself a proxy: in `galeano2021capillary` the
+  solid sphere is modelled in Gerris "by using artificially high viscosity and surface tension
+  coefficients" (`:274`). The 2D deformable paper uses dedicated DNS instead, which is the
+  stronger comparison.
 
-**Consequence for us.** SpectralKM's entire purpose is a *deformable* droplet on a
-deformable bath. The component we would be adopting is precisely the component that has
-never been run, let alone validated. We should not treat "P&M validated this" as covering
-our use case, and any port must be validated independently against Alventosa et al.'s DNS
-and experiments (`references/BouncingDroplets.tex`), not against P&M's sphere results.
-
-Note also that their DNS reference is itself a proxy: in `galeano2021capillary` the solid
-sphere is modelled in Gerris "by using artificially high viscosity and surface tension
-coefficients" (`:274`).
-
-## 3. Limitation 2: continuum lubrication is invalid exactly where the headline result lives
+## 3. The substantive objection: continuum lubrication is invalid where the headline result lives
 
 The paper's distinctive claim is the rim pressure spike: "A pressure spike occurs where the
 layer thins at its edge" (`:308`), with the film "0.5-2 um in the bulk of the layer and a
@@ -84,10 +99,25 @@ The model solves no-slip continuum lubrication throughout, so:
   **overpredicts** the pressure needed to drive the same flux. The spike is therefore
   expected to be too large, by a factor that grows as the film thins.
 
-This is corroborated independently: Roy et al. (arXiv:2303.00444), measuring the air film
-under a drop impacting a solid, find the central dimple in the continuum Stokes regime but
-the **peripheral disc in the slip/transition regime at high `Kn`**, and state that "a unified
-treatment, including continuum and non-continuum mechanics, is required".
+The same objection applies to the 2D deformable paper, which reports the central region at
+"near constant thickness of `O(1) um`" but films "as small as `0.5 um`" at the edges of the
+lubrication region and during the pinch before lift-off
+(`LubricationMediated2D_Sections/Section4.tex:86,131`) -- i.e. `Kn ~ 0.14`, again transition
+regime, again solved with continuum no-slip.
+
+Two independent corroborations:
+
+* Roy et al. (arXiv:2303.00444), measuring the air film under a drop impacting a solid, find
+  the central dimple in the continuum Stokes regime but the **peripheral disc in the
+  slip/transition regime at high `Kn`**, and state that "a unified treatment, including
+  continuum and non-continuum mechanics, is required".
+* More pointedly, the 2D paper itself **cites Sprittles (2024), *Gas microfilms in droplet
+  dynamics: When do drops bounce?*, Annu. Rev. Fluid Mech. 56, 91-118** -- the review devoted
+  to precisely this question, in which non-continuum gas-film behaviour is central to whether
+  and when drops bounce. It is cited as corroboration for the `O(1) um` film thickness
+  (`Section4.tex:131`) while the model retains continuum no-slip. So the relevant literature
+  is known to the authors and simply not incorporated; this is an acknowledged frontier rather
+  than an oversight, but it does bound what the rim predictions are worth.
 
 **This is a fixable flaw, cheaply.** The gas-bearing / magnetic-storage literature handles
 exactly this `Kn` range routinely. Minimum viable fix is a first-order Maxwell slip
@@ -95,7 +125,7 @@ correction, replacing `h^3/12 mu_a` by `h^3 (1 + 6 Kn)/12 mu_a` (or the Fukui--K
 database correction for higher `Kn`). It is a one-line change to the flux and it removes a
 qualitative objection.
 
-## 4. Limitation 3: small `Oh`, linear interfaces
+## 4. Shared limitation: small `Oh`, linear interfaces
 
 Explicitly truncated at linear order in Ohnesorge, with `Oh^2` dropped
 (`:156`, and `:356`: "the system has already been truncated at leading order in `Oh` when
@@ -155,8 +185,10 @@ model's most novel output and it sits at `Kn ~ 0.14-0.45`.
    feasibility edge.
 2. **Include the slip correction from the start** (`h^3 -> h^3(1 + 6 Kn)`). It is nearly free
    and without it the rim physics is not defensible.
-3. Validate on the **deformable** droplet against Alventosa et al.'s DNS and experiments,
-   since that case is exactly what P&M never ran.
+3. Validate on the **axisymmetric deformable** droplet against Alventosa et al.'s DNS and
+   experiments, plus our own group's `Deformable_impactors.tex` (arXiv:2509.22826). The 2D
+   deformable case is validated upstream; the axisymmetric deformable case is not, and that is
+   the one we need.
 4. Expect this to resolve the pressure-shape question honestly: the top hat plus rim
    structure would then be an *output*, not an ansatz, and the Gibbs problem in the current
    pressure basis becomes moot because we would no longer be expanding a near-discontinuous

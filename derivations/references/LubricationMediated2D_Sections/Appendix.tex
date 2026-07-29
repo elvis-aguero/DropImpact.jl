@@ -1,0 +1,66 @@
+\appendix
+\section{Physical parameters}\label{app: Table}
+Table \ref{tab: Appendix} lists the parameters used in the present study.
+\begin{table}
+\begin{center}
+\begin{tabular}{l l c l}
+\hline
+Parameter  & Symbol &  Value & Units  \\
+\hline
+\hline
+Density (air) &  $\rho_a $  & 1.225 & kg m$^{-3}$\\
+Dynamic viscosity (air) & $\mu_a $  & $1.825\times 10^{-5}$ & kg m$^{-1}$s$^{-1}$\\
+
+Density (water) &   $\rho_\beta $  &1000 &kg m$^{-3}$\\
+Dynamic viscosity (water)  &   $\mu_\beta $  & $8.94\times 10^{-4}$& kg m$^{-1}$s$^{-1}$\\
+Density (silicone) &   $\rho_\beta $  &949 &kg m$^{-3}$\\
+Dynamic viscosity (silicone) &  $\mu_\beta $  & $1.9\times10^{-2}$ &kg m$^{-1}$s$^{-1}$\\ 
+
+Surface tension (air-water)  &  $\sigma_\beta $  & $7.49\times10^{-2}$ &kg s$^{-2}$\\
+Surface tension (air-silicone) &  $\sigma_\beta $  & $2.06\times10^{-2}$ &kg s$^{-2}$ \\
+\hline
+Drop radius (water) &  $R_0 $  & $0.5\times 10^{-4}$ - $7\times 10^{-4}$ &m\\
+Initial speed (water) &   $W_0 $  & 0.0717 - 1.0733 &m s$^{-1}$\\
+Weber Number (water) &  We  & 0.05 - 0.8 & --\\
+Ohnesorge Number (water) &  Oh  & 0.0044 - 0.0163 &--\\
+Reynolds Number (water) & Re & 13.7 - 190.1 &--\\
+ \hline
+ Drop radius (silicone) &  $R_0 $  & $8.3\times 10^{-4}$ &m\\
+Initial speed (silicone) &   $W_0 $  & 0.2-0.4 &m s$^{-1}$\\
+Weber Number (silicone) &  We  &  1.54 - 6.11 & -- \\
+Ohnesorge Number (silicone) &  Oh  & 0.149 & --\\
+Reynolds Number (silicone) & Re & 1.53 - 16.583 & --\\
+\hline
+\end{tabular}
+\caption{Physical parameter values for the results presented within this paper, including value ranges for nondimensional numbers for the chosen parameters. The values of water were used throughout the main body of the text in section \ref{sect:Results}, with the switch to silicone oil used in the extension to Faraday pilot-waves in section \ref{sect:Conclusion}. Silicone oil is used experimentally and, due to the increased viscosity and decreased surface tension, also results in less stringent numerical timestepping. }\label{tab: Appendix}
+\end{center}
+\end{table}
+
+\section{Boundary layer scaling}\label{App: Boundary}
+Solutions to the quasi-potential model laid out by equations \eqref{eq: laplace}-\eqref{eq: end of full system} exhibit a boundary layer effect at higher Reynolds numbers. In order to see that one may solve the (linear) `free-wave' problem and obtain explicitly the forms of the free surface $\eta_b$ and velocity potential $\phi_b$ as 
+\begin{equation*}
+    \eta_b = a e^{i(kx \pm \omega_0 t)} e^{-2\nu_b k^2 t}, \qquad \phi_b = \pm i a \frac{\omega_0}{|k|} e^{i(kx \pm \omega_0 t)} e^{-2\nu_b k^2 t} e^{|k|z},
+\end{equation*}
+where $\omega_0 = \sqrt{|k|(g + \sigma_b k^2/\rho_b)}$ is the frequency of undamped capillary-gravity waves. As expected, this is a time decaying travelling wave. Furthermore, one may now compute the induced boundary layer represented by $\psi(x,z,t)$ using $\partial_x \psi(x,0,t) = 2\nu_b \partial_x^2 \eta_b(x,t)$ (from the leading order balance of (2.17)). This results in 
+$$\Psi = 2ik\nu_b a e^{i(kx \pm \omega_0 t)} e^{-2\nu_b k^2 t}e^{\pm i\sqrt{2}\sqrt{Re_\omega}|k|z/2}e^{ \sqrt{2}\sqrt{Re_\omega}|k|z/2},$$
+where $Re_\omega = \frac{\omega_0}{\nu_b k^2}$. Hence one finds that the vertical decay length scale for $\psi$ is $O(Re_\omega^{-1/2})$ and that denoting $u^\psi,v^\psi$ and $u^\phi,v^\phi$ as the vortical and irrotational components of the velocity field respectively, we have
+$$u^\psi \sim Re_\omega^{-1/2} u^\phi, \qquad v^\psi \sim Re_\omega^{-1} v^\phi.$$
+This describes the boundary layer structure as $Re_\omega \rightarrow \infty$.
+
+\section{Viscosity consideration}\label{app: Visc}
+ 
+The most challenging numerical issue we encountered was an instability related to stiffness of this problem. The severity of this issue depended on $W\!e$ and $Oh$, mainly for high $W\!e$. Instabilities correlated with larger deformations of the droplet which, through the thinning of the lubrication layers creates large pressure fluctuations from the $h^{-3}$ dependence of pressure on layer thickness. Naturally, this issue was absent in the solid impact case. 
+
+We chose to resolve this issue with an artificially enhanced viscosity during contact, specifically while $h \le \varepsilon R_0$, and describe here the choice of viscosity and its effect on the results of a test deformable case. An in-depth stability analysis of the system and other solutions for this numerical issue is left for future work. Briefly, one could consider fully implicit numerical schemes (which pose some challenges due to the nonlinearity of the elliptic lubrication equation), split step schemes where the drop oscillations and lubrication equation are resolved implicitly or further asymptotic reduction of the droplet equations during impact.   
+
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.9\textwidth]{Figures/Fig14.eps}
+    \caption{Trajectories for droplets with $R_0= 0.2$mm, and $W_0 = -0.2$ms$^{-1}$, using a modified viscosity $\mu^* = A\mu$, with $A$ ranging from $17$ to $500$. The solid black line corresponds to DNS results, and the dashed black line corresponding to the solid rebound of the same size and initial velocity.}
+    \label{fig:varyingviscosity}
+\end{figure}
+
+We introduce a viscosity enhancement coefficient $A$,  such that $\mu^* = A\mu$ during contact. We determined the smallest value of $A$ for which the entire parameter sweep of simulations would be stable, through over-damping the droplet and slowly lowering the value of $A$. Figure~\ref{fig:varyingviscosity} demonstrates a range of values of $A$ for the single run case with $R_0 = 0.2$mm and $W_0 = -0.2$ms$^{-1}$. We present the solid lubrication mediated model with corresponding values, alongside DNS of the same initial conditions. The solid model can be interpreted as the limit $A \to \infty$. For this case, the choice $A=17$ was the lowest value that could be used reliably without introducing numerical instabilities. By contrast, large values of $A>400$ seemed to converge to the same result. Considering the full $W\!e$ and $Oh$ parameter regime within our study, the choice $A=150$ provided the smallest damping without instability. 
+
+In Figure~\ref{fig:varyingviscosity} we observe the effect that the damping has on the rebound, specifically plotting the vertical height of the south pole. The DNS result which does not have a modified viscosity has a pronounced and sharper deflection at first point of contact of the drop and bath. By contrast, the solid drop case leads to a smooth trajectory.  The switching off of the additional viscosity post-contact allows for the oscillations that are expected, and are closer aligned to the behaviour of the DNS results. Further investigation of energy transfers during impact could lead to improved reduced models.

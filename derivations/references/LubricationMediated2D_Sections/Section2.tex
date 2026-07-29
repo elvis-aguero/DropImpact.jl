@@ -1,0 +1,33 @@
+\section{Mathematical model}\label{sect:Model}
+
+
+Consider a two-dimensional liquid droplet, as though an infinite-cylinder in the out-of-plane direction, moving through an air-filled upper half plane towards a deep bath of infinite depth and width as shown in figure \ref{fig:figure1}. We restrict the centre of mass of the droplet to vertical motion along the $z$-axis, introducing a symmetry to the problem with respect to the $z$ axis. Introducing the subscript notation $\cdot_\alpha$ to denote the different fluid regions, where $\alpha \in \{a,b,d\}$ are the air, bath, and droplet respectively, the velocity of each fluid is given by $\mathbf{u}_\alpha$, the pressure is given by $p_\alpha$, and $\mu_\alpha$, $\rho_\alpha$ and  $g$ denote the dynamic viscosity, density and gravity, respectively.
+
+\begin{figure}
+    \centering
+    \include{Figures/Fig1}
+    \caption{Schematic of model domain denoting two frame of reference points. The origin for the full frame is the Cartesian $(x,z)$-coordinate set directly beneath the south pole of the drop and aligned to an unperturbed bath free surface. The droplet will be evolved in a moving frame of reference with polar coordinates ($r,\theta)$ about the centre of mass of a drop whose free surface lies at $r=R_0$, and $\theta=0$ pointing vertically downwards towards the bath. }
+    \label{fig:figure1}
+\end{figure}
+While each region of fluid will be treated differently due to particular approximations and geometries, in each region, $\mathbf{\Omega}_\alpha$, we begin with the incompressible Navier-Stokes equations
+
+   \begin{align}\label{eq: mass}
+    \nabla \cdot \mathbf{u}_\alpha &=  0, \qquad &\mathbf{x} &\in \Omega_\alpha,\\ \label{eq: mom}
+    \rho_\alpha \left(\partial_t \mathbf{u}_\alpha + (\mathbf{u}_\alpha\cdot \nabla)\mathbf{u}_\alpha \right) &= -\nabla p_\alpha + \mu_\alpha \nabla^2 \mathbf{u}_\alpha - \rho_\alpha g \mathbf{e}_z, \qquad & \mathbf{x} &\in \Omega_\alpha,
+\end{align}
+where $g$ is the gravitational constant.
+At the interface between fluids, defined by $F_\beta(\mathbf {x},t)=0$, where $\beta$ takes on the values $b$ or $d$, for the bath-air and drop-air interfaces respectively, the kinematic and stress continuity boundary conditions and the velocity continuity respectively are given by 
+
+\begin{align}\label{eq: KBC General}
+    \partial_t F_\beta + (\mathbf{u}_\beta \cdot \nabla)F_\beta &= 0, \qquad &x\in \partial\Omega_\beta,\\
+    p_\beta \mathbf{n}_\beta - \mu_\beta \mathbf{\tau}_\beta \mathbf{n}_\beta &= p_a \mathbf{n}_\beta - \mu_a \mathbf{\tau}_a  \mathbf{n}_\beta + \sigma_\beta \kappa_\beta \mathbf{n}_\beta, \qquad & x\in \partial\Omega_\beta,\label{eq:StressCont} \\
+    \mathbf{u}_\beta &=  \mathbf{u}_a,  \qquad & x\in \partial\Omega_\beta,\label{eq:VelocityCont}
+   \end{align}
+   
+where $\sigma$ is the surface tension coefficient, $\kappa$ denotes the curvature of the free surface whose unit normal vector is given as $\mathbf{n}_\beta$, and  $\tau = (\nabla \mathbf{u} + \nabla \mathbf{u}^T)$ is the rate of strain tensor. In the far field for the air and the bath, the velocities vanish, and pressures tend to their hydrostatic balance values. 
+We shall now consider the flows within the bath, air, and liquid domains separately, using the relevant approximation the respective domain requires.
+   
+\input{Sections/ModelSubsections/Subsection1}
+\input{Sections/ModelSubsections/Subsection2}
+\input{Sections/ModelSubsections/Subsection3}
+

@@ -1,0 +1,57 @@
+
+\section{Repeated bouncing}\label{sect:Faraday}
+
+In the previous section we presented a series of results obtainable by the lubrication mediated model and highlighted their general agreement with well validated DNS methods through a parameter study. We will now highlight the robustness of the lubrication mediated model through demonstrating sustained bouncing behaviour under the influence of gravity and a vertical oscillation of the bath. This justifies the potential of the model to be used within further studies of Faraday pilot-wave models: in particular tunnelling studies \cite{nachbin2017tunneling} use two-dimensional droplets. 
+
+Thus far we have reviewed the results of the lubrication-mediated model of the two-dimensional droplet rebounding off a deep liquid bath. A natural extension to this system is the inclusion of repeated bounces with the inclusion of other effects. With the addition of gravity, after the initial rebound and detachment, the droplet undergoes ballistic motion and falls back onto the bath. As noted by Couder \textit{et al} \cite{couder2005walking}, a way to investigate repeated bouncing behaviour of droplets is to vibrate the liquid bath and achieve a sustained periodic behaviour for a vibrational forcing of sufficient amplitude. Both gravity and vibrational forcing are straightforward additions to the model and a sinusoidal forcing in the gravity term is introduced with the functional form $G(t) = g(1 - \Gamma \cos(\omega_f t))$.  For sufficiently large $\Gamma$ such a forcing generates the Faraday instability: growing standing waves on the free surface known as Faraday waves. The threshold at which Faraday waves are excited is denoted $\Gamma_F$. In order for sustained bouncing behaviour to occur, the bath is instead oscillated close to, but below this threshold, that is, for some $\Gamma < \Gamma_F$. In what follows we present the results when such a forcing is introduced to the lubrication-mediated model. 
+
+Following the methodology presented in Milewski \textit{et al} \cite{milewski2015faraday}, we incorporate the forced oscillations of the bath as an oscillating frame of reference. For a given oscillation frequency $\omega_f$ and forcing amplitude $\Gamma$, the equations derived in Section~\ref{sect:Model} for the liquid bath are now given as 
+\begin{align}
+\partial_t \eta_b  &= \partial_z \phi + 2\nu_b \partial_x^2 \eta_b, \qquad &z&=0, \label{eq: Faraday KBC}\\
+\partial_t \phi &= -\frac{1}{\rho_b} p_a -  g(1-\Gamma \cos(\omega_F t))\eta_b + \frac{\sigma_b}{\rho_b}\partial_x^2 \eta_b  + 2\nu_b \partial_x^2 \phi, \qquad &z&=0, \label{eq: Faraday  DBC}
+\end{align}
+and the equation governing the droplet motion $\tilde{Z}(t)$ in the oscillating frame are
+\begin{equation}\label{eq: Faraday vert dyn}
+    \rho_d \pi R_0^2 \frac{\text{d}^2 \tilde{Z}}{\text{d}t^2} = \int_{-l^*}^{l^*} P dx - \rho_d \pi R_0^2 g(1-\cos(\omega_F t)).
+\end{equation}
+The motion in a fixed laboratory frame $Z(t)$ is obtained by the transformation $Z = \tilde{Z} + \Gamma \omega_f^{-2} \cos(\omega_f t)$. Figure~\ref{fig: faraday} demonstrates the periodic bouncing behaviour obtained with the lubrication-mediated model. To capture these results, the numerical domain was shortened to an integer ratio of the Faraday wavelength of the bath, specifically, corresponding to $L = 12$cm. The droplet was then released from a small height, with an initial velocity of $0.1$ms$^{-1}$. The choice of initial velocity is unimportant as long as the droplet is able to rebound, as the system will eventually stabilise to a periodic state with these parameters. 
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{Figures/Fig12.eps}
+    \caption{Periodic droplet rebounds obtained for viscous silicone oil with radius $R=0.83$mm, on a bath oscillated at $80$Hz with forcing amplitude $\Gamma = 3$. Plotted with the oscillation period of an undisturbed free surface behind to highlight deviation away from this rest state. The dynamics settles on a periodic pattern corresponding to 4 oscillations of the bath every 2 rebounds of the droplet (denoted as a (4,2) mode), within a period $0.05$ s.}
+    \label{fig: faraday}
+\end{figure}
+
+As shown in Figure~\ref{fig: faraday} the stable state is a $(4,2)$ mode \cite{milewski2015faraday}, which is denoted as such due to the periodic motion requiring 4 oscillations of the bath for every 2 rebounds of the droplet. In the figure, the dashed line indicates the unperturbed surface, as though the behaviour of the droplet were omitted from the system. The upper line then represents the south pole of the drop, and the lower blue line corresponds to the free surface of the liquid bath.
+
+We note that the full simulation was run for $1.2$ seconds of physical time in order for the system to reach periodicity from an arbitrary initial data. Thus this simulation was between 10-100 times longer in physical time than the single-bounce simulations in our study. Despite this, the simulation only required several hours of runtime on a standard desktop in MATLAB. Such a simulation would be prohibitively expensive for DNS. 
+
+\begin{figure}
+    \begin{center}
+        \begin{subfigure}{0.425\linewidth}
+          \subcaption{}
+            \includegraphics[width=\textwidth]{Figures/Fig13a.eps}
+        \end{subfigure}
+        \begin{subfigure}{0.565\linewidth}
+            \subcaption{}
+            \includegraphics[width=\textwidth]{Figures/Fig13b.eps}
+        \end{subfigure}
+    
+    \caption{(a) Computed Force-depth plot for L-M model in a (4,2) mode (hence 2 cycles in the figure per period of motion) and fitted data for a linear spring model. (b) Phase-plane dynamics in an inertial frame of reference for the drop and the free-surface. 2 cycles of the (4,2) mode are shown. The drop alternates from a parabolic trajectory (shown together with a dashed line prediction) and an impact state. The free surface alternates between an elliptic trajectory (prediction shown in dashed ellipse in the centre of the figure) and being almost equal to the drop during impact.}
+    \label{fig: Force Plot}
+    \end{center}
+\end{figure}
+
+In several studies of bouncing drops, a linear spring model has been used to elucidate the effect of impacts, for example off soap films \cite{gilet2009fluid} or to describe drops rebounding on a solid hydrophobic surface \cite{okumura2003water}. A linear model for rebounding off vibrating baths was proposed in the work of  Mol{\'a}{\v{c}}ek et al. \cite{molavcek2013dropsA}, and recently Primkulov et al. \cite{primkulov2025nonresonant} used such a model to describe non-resonant effects in pilot wave hydrodynamics. The simplest linear spring model takes the form
+\begin{equation}
+m\frac{d^2 Z}{dt^2} + \gamma \frac{d\bar{Z}}{dt} + \beta \bar{Z}   = -mg, \qquad \bar{Z}<0.
+\end{equation}
+Here $Z$ is measured in an inertial frame, while $\bar{Z}$ and $\frac{d\bar{Z}}{dt}$ are measured relative to the free surface; $\bar{Z}$ is the depth of impact, and $\frac{d\bar{Z}}{dt}$ is the speed of the drop relative to the free surface speed. These quantities are somewhat ambiguous since the impact itself deforms the surface, but may be approximated as relative to the free surface \emph{unperturbed} by the impact. The forces exerted by the bath on the droplet are therefore given by 
+$$- \left(\gamma \frac{d\bar{Z}}{dt} + \beta \bar{Z}\right), \qquad \bar{Z}<0. $$
+
+From our numerical simulations of the LM model, we recover the force $F(t) = \int_{-l^*}^{l^*} P dx$ experienced by the droplet, its impact depth $\bar{Z}(t)$ and velocity $\frac{d\bar{Z}}{dt}$ and attempt to construct a plausible linear model by fitting $\gamma$ and $\beta$. 
+
+The results are presented in Figure~\ref{fig: Force Plot}, where we show the computed force during impact in our LM model for the simulation in Figure~\ref{fig: faraday}. The periodic curves in the $\bar{Z}-F$ plane are composed of two cycles, one for each impact. For each cycle there is a jump in the force at impact, and this elevated force persists (and increases) throughout the downward motion of the drop. During upward motion the force decreases to a much lower level. The area inside each cycle is the net work done on the fluid bath by the droplet, generating the wave motion. An approximate linear fit of the force curve may be made using $\gamma \approx 0.35$ and $\beta \approx 20$ as shown in the figure. While there appear to be some nonlinear effects at play in the dynamics shown, it is plausible that a linear model could provide further simplifications and efficiencies while also capturing essential behaviour. Implementing a linear model including wave generation is beyond the scope of this work. 
+
+Figure~\ref{fig: Force Plot} also shows the corresponding trajectory of our computed LM solution in the inertial $Z-W$ phase plane. The droplet exhibits parabolic flight trajectories and a clear jump in its acceleration at impact, while the free surface has a jump in velocity at the same time. The dashed lines in the figure indicate parabolas matching the flight path of the droplet and an elliptical path marking an undisturbed vertically oscillating free surface (both in a laboratory frame). The figure demonstrates that the free surface returns to this undisturbed oscillation rapidly after droplet lift-off and before the next impact.

@@ -1,0 +1,57 @@
+\section{Numerical methods}\label{sect:Numerics}
+
+ In the previous section we introduced the equations that govern each of the three fluid regions and how they fit within a full lubrication-mediated (LM) quasi-potential fluid model. We shall now introduce the numerical methods used to evolve this system during this section. We will also describe a high-accuracy direct numerical simulation (DNS) implementation for the full multi-fluid system, which can be used as a benchmark for the various approximations in our proposed methodology. Fully open-source codebases for the LM and DNS approaches presented in this section, as well as for the LM extension to Faraday systems detailed in Section~\ref{sect:Faraday}, can be found in the dedicated GitHub repository: \href{https://github.com/rcsc-group/BouncingDropletsLiquid2D}{https://github.com/rcsc-group/BouncingDropletsLiquid2D} \cite{openaccesscode}.
+ 
+
+\subsection{Solving the lubrication-mediated quasi-potential model} 
+
+The wave dynamics of the bath requires the solution of Laplace's equation in the lower half plane in order to compute the vertical fluid velocity $\partial_z \phi(x,z,t)|_{z=0}$, given $\phi(x,0,t)$, for the advection of the free surface. This is the simplest example of the use of Dirichlet-to-Neumann maps, and can be expressed succinctly in the Fourier domain. Defining $\Phi(x,t) = \phi(x,0, t)$, and denoting its Fourier transform as $\hat{\Phi}(k,t) = \mathcal{F}\{\Phi(x,t)\},$ the solution to Laplace's equation is given by 
+
+\begin{equation*}
+    \phi(x,z,t) = \mathcal{F}^{-1}\{e^{|k|z} \hat{\Phi}\},
+\end{equation*}
+where $\mathcal{F}^{-1}$ is the inverse Fourier transform. Hence, $\partial_z \phi(x,0,t) = \mathcal{F}^{-1}\{|k| \hat{\Phi}\}.$ The full lubrication-mediated quasi-potential model then can be written as a system of equations for $\Phi, \eta_b, \eta_d, Z, h, P$ as follows
+
+\begin{align}
+    \partial_t \Phi &= -\frac{1}{\rho_b}P - g\eta_b + \frac{\sigma_b}{\rho_b} \partial_x^2 \eta_b + 2\nu_b \partial_x^2 \Phi \label{eq: Numeric Phi_t},\\
+    \partial_t \eta_b &= \mathcal{F}^{-1}\{|k|\mathcal{F}\{\Phi\}\} + 2\nu_b \partial_x^2 \eta_b, \\
+    \ddot{c}_n &+ 2\lambda_n \dot{c}_n + \omega_n^2 c_n = -\frac{n}{\rho R_0} \hat{p}_n,
+    \end{align}
+   where
+   
+   \begin{equation}
+   \eta_d=  R_0+\sum_{n=2}^\infty c_n cos(n\theta), \qquad \hat{p}_n = \frac{1}{\pi}\int_{-\theta^*}^{\theta^*} P cos(n\theta) \; d\theta, 
+   \end{equation}
+   and
+   
+\begin{equation}
+    \frac{\text{d}Z}{\text{d}t} = W,  \qquad  \frac{\text{d}W}{\text{d}t} = \frac{1}{\rho_d \pi R_0^2}\int_{-l^*}^{l^*} P dx - g, 
+\end{equation}
+with 
+
+\begin{equation}\label{eq: Numeric LubricationEquation}
+    \partial_x \left[\frac{1}{12\mu_a} h^3 \partial_x P  - \frac{1}{2} h \partial_x \Phi \right] = \partial_t h, \qquad h = \left(Z-\eta_d\right) - \eta_b, \qquad x \in [-l^*,l^*].
+\end{equation}
+Mathematically, the above system should be considered as time-evolution differential equations for $\Phi, \eta_b, \eta_d, Z,$ together with a nonlinear elliptic problem (the lubrication equation) for $P$.
+
+The lubrication region is bounded symmetrically by $|x|=l^*$ on the free surface and a corresponding $|\theta|=\theta^*$ on the droplet. Where necessary polar droplet coordinates and Cartesian free surface coordinates are related through standard transformations. The pressure outside of this lubrication region is considered to be zero. In order to define the edge of the lubrication region where $h \ll R_0$, we introduce $\varepsilon \ll 1$ such that $l^*$ solves
+
+\begin{equation}
+h(l^*) = \varepsilon R_0.
+\end{equation}
+In the numerical results we find that the lubrication layer thickness is insensitive to variation for a range of small values of $\varepsilon$, thus the value $\varepsilon=0.01$ is used to set the outermost point in the lubrication layer according to the formula above. In Moore \cite{moore2021introducing} the nondimensional value $(\mu_a/\rho_b R_0 W_0)^{1/3}$ obtained from  the horizontal momentum balance in the layer sets the vertical to horizontal scaling of the air layer. In our cases this value ranges between $0.05 < (\mu_a/\rho_b R_0 W_0)^{1/3} < 0.1$.
+
+The system \eqref{eq: Numeric Phi_t}-\eqref{eq: Numeric LubricationEquation} is  spatially discretized on a periodic uniform grid spanning $[-L/2,\; L/2]$ using $N_x$ points, and using $N_\theta$ points around the droplet. We will choose a periodic domain in $x$ to approximate the problem, as this simplifies the evolution of the bath equations and the domain can be made sufficiently large such that waves from the boundary do not reach the droplet during impact. Typical numbers of grid points for the discretization were $N_\theta=2^8$ and $N_x = 2^{13}$ on a domain size of $L = 16 \pi R_0$. Further grid refinement did not change the numerical results appreciably, which was systemically tested through fixing a known stable set of parameters, and varying $N_\theta$ and $N_x$ both independently and concurrently. We varied $N_\theta$ between $2^6$ and $2^9$ in powers of 2, and a similar approach was taken to the bath for $N_x$ between $2^9$ and $2^{15}$, until the solutions converged.
+Fast Fourier transforms were used for the evaluation of derivatives and the Dirichlet-to-Neumann map. The lubrication equation \eqref{eq: Numeric LubricationEquation} was integrated with the trapezium rule. Cubic splines were used for the interpolation of values from the polar grid on the droplet to the Cartesian grid on the bath.
+
+Numerical time-stepping used the Matlab \texttt{ode45} adaptive Runge-Kutta scheme. We also used the basic Runge-Kutta $4^{\textrm{th}}$ order scheme which utilised fixed timesteps for some computations to verify the results through varying the timestep chosen until good agreement between models was met (which occurred for $\delta t = 10^{-9}$s) 
+The adaptive timestepper was efficient as a small time step is needed during certain phases of impact: the system is highly sensitive at first contact between the drop and bath, and when the lubrication layer begins to retract. However, longer time steps can be taken during the remainder of the rebound, and a much larger ones prior to, or after contact. We have found that the droplet deformation can create instabilities which result in unphysical contact, particularly at higher impact speeds and larger droplets. The instabilities can be avoided by adding artificial damping (through an increased viscosity) to the droplet equations during impact. Solid impacts did not suffer from this instability. 
+
+The initial conditions of the system were taken as the bath and droplet free surfaces lying unperturbed with the centre of mass of the droplet at a height $2R_0$ above the undisturbed surface of the bath, with some initial (negative) velocity $W_0$. This pre-impact height was chosen to facilitate direct comparison with the direct numerical simulation framework, which does not have a fixed criterion for bath-droplet interactions, instead solving the multi-phase flow equations in both liquid and gas regions in full over the timescale of each numerical experiment. Our dedicated implementation and setup for this problem is described in the following subsection. 
+
+\subsection{Direct numerical simulation}
+The DNS framework for this study has been designed using the Basilisk open-source code infrastructure \cite{popinet2009accurate,popinet2015quadtree}, using a finite volume discretisation scheme and second order adaptive in time and space capabilities which benefit the multi-scale nature of the problem. The interplay between inertial, capillary and viscous forces make the target problem especially challenging, with Basilisk a particularly suitable choice in this context in view of its versatile setup \cite{popinet2018numerical}. Variations of our implementation have been used successfully in the past within an axisymmetric formulation as part of studies of impacting superhydrophobic solids \cite{galeano2021capillary} and, more recently, liquid drops \cite{alventosa2023inertio}, with the present implementation representing a two-dimensional counterpart constructed to enable reduced-dimensional model comparisons with the deformable droplet model proposed in Section~\ref{sect:Model}. While previous multi-methodological investigations contained rigorous validation efforts, we have established the robustness of our code in the present configuration as well. Both trajectory metrics and detailed information such as gas film thickness, anticipated to be of $\mathcal{O}(1)\ \mu$m based on the recent experimental work of Tang \textit{et al} \cite{tang2019bouncing}, have been monitored in view of reaching mesh independence to a suitable level of accuracy. This required the usage of a dedicated non-coalescence setup \cite{sanjay2023drop}, which ensures no artificial merging of the drop and pool occurs owing to grid resolution limitations. This required the testing of minimum cell sizes down to sub-micron scales.
+
+The computational box is set up to measure $32R_0$ in each dimension, and is half-filled with liquid, leading to sufficiently large domains in terms of both depth and lateral extent to prevent bottom effects and outgoing wave reflections to affect the results of interest. Resolution level $12$, pertaining to a setting with $2^{12}$ cells per dimension for the minimum cell size, was found to be sufficient to ensure reliable results in our parameter regimes of interest following careful numerical experimentation. The adaptive refinement strategy focused gridnodes in regions with fluid-fluid interfaces, as well as regions with large changes in magnitude of the velocity components, ensuring sufficient resolution in regions around the drop, as well as near the impact region, and supporting the accurate capturing of the outgoing waves in the pool. We note to have also made use of an interpolation method employing a harmonic mean formulation for the viscosity in the design of our implementation, as well as interface filtering techniques, owing to the relatively large contrast of the physical properties between the fluids used which may generate undesired instabilities, particularly in a rapidly evolving multi-scale structure such as the one present here. This led to runs characterised by $\mathcal{O}(10^5)$ gridnodes (a highly significant, and indeed necessary, decrease from the $\mathcal{O}(10^7)$ uniform grid counterpart setup) and approximately $\mathcal{O}(10^2)$ CPU hours per run, with the adaptive timestepping becoming particularly relevant in the delicate stages in which the drop and the pool are in contact.
+
+The above data-rich framework provides access to carefully resolved drop and bath interface coordinates, as well as other general information of interest such as velocities and pressure field data, which enables verification of key hypotheses and ensures the creation of a strong foundation for the deformable drop model comparisons, which are expanded upon in Section~\ref{sect:Results}.
