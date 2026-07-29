@@ -96,13 +96,26 @@ w_of_x(beta::AbstractVector, x, L::Integer) = -r_drdx_of_x(beta, x, L)
 
 """Quadrature nodes and weights mapped from `[-1,1]` onto `[xc,1]` (design doc
 eq:gauss-quad)."""
-function mapped_nodes(xc, nodes::Vector{Float64}, weights::Vector{Float64})
+function mapped_nodes(xc, nodes::Vector{Float64}, weights::Vector{Float64};
+                     sqrt_map::Bool=false)
     x = similar(nodes, typeof(xc))
     wq = similar(nodes, typeof(xc))
-    half = (1 - xc) / 2
+    span = 1 - xc
+    half = span / 2
     @inbounds for i in eachindex(nodes)
-        x[i] = xc + (1 + nodes[i]) * half
-        wq[i] = weights[i] * half
+        if sqrt_map
+            # psi = t^2 substitution, for the alpha = 1/2 pressure basis. Under it
+            # sqrt(psi)*Ptilde_n(psi) = t*Ptilde_n(t^2) is polynomial in t again, so
+            # Gauss-Legendre exactness survives an otherwise non-polynomial integrand:
+            #   int_{xc}^1 g dx = span * int_0^1 g(x(t)) 2t dt,  t = (1+s)/2
+            # and the nodes cluster toward the contact line, where the edge behaviour is.
+            t = (1 + nodes[i]) / 2
+            x[i] = xc + span * t^2
+            wq[i] = weights[i] * t * span
+        else
+            x[i] = xc + (1 + nodes[i]) * half
+            wq[i] = weights[i] * half
+        end
     end
     return x, wq
 end

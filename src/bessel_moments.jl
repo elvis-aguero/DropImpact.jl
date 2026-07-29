@@ -31,11 +31,12 @@ composed with the geometric map has no elementary antiderivative -- so quadratur
 not a convenience but a necessity (design doc §subsubsec:quadrature).
 """
 function c_m_all(chat::AbstractVector, xc, x::AbstractVector, wq::AbstractVector,
-    r::AbstractVector, w::AbstractVector, k::Vector{Float64}, bath_norm::Vector{Float64})
+    r::AbstractVector, w::AbstractVector, k::Vector{Float64}, bath_norm::Vector{Float64},
+    alpha=0.0)
     M = length(k) - 1
     T = promote_type(eltype(chat), typeof(xc), eltype(w))
     out = Vector{T}(undef, M + 1)
-    pw = [pressure_poly_raw(chat, xc, x[i]) * w[i] * wq[i] for i in eachindex(x)]
+    pw = [pressure_poly_raw(chat, xc, x[i], alpha) * w[i] * wq[i] for i in eachindex(x)]
     @inbounds for m in 0:M
         km = k[m+1]
         s = zero(T)

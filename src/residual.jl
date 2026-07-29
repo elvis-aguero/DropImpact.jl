@@ -25,7 +25,7 @@ shifted-Legendre pressure/test basis `P̃_n(ψ(x_i))`. All plain `Float64`: thes
 `xc` alone, never on the pressure coefficients, so they are outside the AD tape.
 """
 function contact_quad(xc::Float64, p::Params)
-    x, wq = mapped_nodes(xc, p.gauss_nodes, p.gauss_weights)
+    x, wq = mapped_nodes(xc, p.gauss_nodes, p.gauss_weights; sqrt_map=(p.alpha != 0))
     P, dP = legendre_tables(x, p.L)
     Ptil = [legendre_P_table(p.N, 2 * (xi - xc) / (1 - xc) - 1)[1:p.N+1] for xi in x]
     return x, wq, P, dP, Ptil
@@ -79,17 +79,17 @@ function unpack_state(chat::AbstractVector, xc, q, kappa::Vector{Float64},
     local xi, r, w, bl
     for _ in 1:12
         xi, r, w = geom_at_nodes(beta, x, P, dP, p.L)
-        bl = b_l_all(chat, xc, x, wq, P, w, p.L)
+        bl = b_l_all(chat, xc, x, wq, P, w, p.L, p.alpha)
         beta_new = gam .+ lambda .* bl
         done = maximum(abs.(beta_new .- beta)) < 1e-13
         beta = beta_new
         done && break
     end
     xi, r, w = geom_at_nodes(beta, x, P, dP, p.L)
-    cm = c_m_all(chat, xc, x, wq, r, w, p.k, p.bath_norm)
+    cm = c_m_all(chat, xc, x, wq, r, w, p.k, p.bath_norm, p.alpha)
     am = alpha .+ kappa .* cm
     p.wall === :clamped && (am = apply_clamp(am, kappa, p))
-    f = com_force_closed(chat, xc, x, wq, w)
+    f = com_force_closed(chat, xc, x, wq, w, p.alpha)
     zcm = mu + kappa_cm * f
     return am, beta, zcm, f, cm, bl
 end
@@ -185,14 +185,25 @@ end
 """
     check_positivity(chat, xc; nsample=200) -> Bool
 
-Design doc eq:check-positivity. NOT imposed and, at large `N`, not a meaningful test:
-the compliance operator is compact, so the pointwise pressure is not a converged output
-of the model and `min p` is measured to diverge with `N`. Retained as a diagnostic for
-small `N`, where the pressure is close to fully resolved.
+Design doc eq:check-positivity. NOT imposed, but a genuine diagnostic -- of the
+truncation, not of the model. Measured behaviour, over a full impact:
+
+  * Past the resolvable-rank budget it fails almost everywhere: at `M=L=60`, raising `N`
+    from 3 to 12 takes the fraction of contact steps with `min p < 0` from 2% to 90%.
+    A failure here is the loudest available signal that `N+1` exceeds `0.6*n_*`
+    (see `resolvable_rank_estimate`).
+  * Inside the budget a small residual remains, ~1% of steps, and its magnitude is
+    controlled by the BATH truncation, not by `N`: the worst excursion shrinks
+    monotonically from `-21` to `-2.4` as `M` goes 40 -> 120 at fixed `L=120, N=3`,
+    while being flat at `~-3.8` across `N=1..7` at fixed `M=80, L=240`.
+
+The earlier claim here -- that this test is meaningless at large `N` because the
+compliance operator is compact -- was never verified and is false; see
+`test/test_rank_law.jl` and `derivations/DIAGNOSTICS-NOTATION.md`.
 """
-function check_positivity(chat::AbstractVector, xc; nsample::Int=200)
+function check_positivity(chat::AbstractVector, xc; nsample::Int=200, alpha=0.0)
     for x in range(xc, 1.0; length=nsample)
-        pressure_poly_raw(chat, xc, x) < 0 && return false
+        pressure_poly_raw(chat, xc, x, alpha) < 0 && return false
     end
     return true
 end

@@ -39,6 +39,7 @@ struct Params
     b::Float64
     h0::Float64
     nq::Int
+    alpha::Float64
     wall::Symbol
     k::Vector{Float64}
     bath_norm::Vector{Float64}
@@ -57,7 +58,8 @@ eq:com) exact: the integrand `p(x) * d[r(x)²]/dx` has degree `N + 2L + 1` in `x
 (pressure degree `N`, `r² = ξ²(1-x²)` degree `2L+2`), and an `nq`-point rule is exact
 for polynomials up to degree `2nq-1`.
 """
-min_nq_for_exact_com(N::Integer, L::Integer) = cld(N + 2L + 2, 2)
+min_nq_for_exact_com(N::Integer, L::Integer, alpha=0.0) =
+    alpha == 0 ? cld(N + 2L + 2, 2) : cld(2N + 4L + 4, 2)
 
 """
     resolvable_rank_estimate(; M, L, b, theta_c) -> Float64
@@ -110,6 +112,23 @@ const DEFAULT_M = 60
 const DEFAULT_L = 120
 const DEFAULT_N = 3
 const DEFAULT_NQ = 200
+
+# Edge exponent of the pressure basis, p = psi^alpha * sum(chat_n * Ptilde_n(psi)).
+#
+#   alpha = 0    plain shifted Legendre. Reproduces the model exactly as published.
+#   alpha = 1/2  imposes p ~ sqrt(distance from the contact line), the behaviour a free,
+#                smoothly-pasted contact edge produces, and which a plain polynomial
+#                resolves only algebraically (measured L2 ~ N^-1.6, L-inf ~ N^-0.8).
+#
+# DEFAULT IS 0 PENDING A LIVE-IMPACT MEASUREMENT. The case for 1/2 is real but conditional:
+# in frozen-geometry tests it converges spectrally when the true pressure carries a
+# square-root edge (relative L2 3.3e-3 -> 2.0e-15 at N=12 for one such profile), and it
+# FAILS BADLY when the true edge pressure is finite and nonzero -- L-inf ~ 0.95,
+# non-convergent, negative pressure -- because every basis function vanishes at psi = 0.
+# That is the pinned-contact-line case (cf. derivations/feasibility_pinned_contact_line.jl).
+# Until alpha = 1/2 is shown to win over a full impact with the production selector, it is
+# opt-in.
+const DEFAULT_ALPHA = 0.0
 
 """
     Params(; We, Bo, Oh, b, h0, wall=:free, M, L, N, nq, check_budget=true)
@@ -187,7 +206,10 @@ the bath eigenvalues and the Fourier-Bessel weight (design doc eq:bessel-norm):
 """
 function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
                 M::Integer=DEFAULT_M, L::Integer=DEFAULT_L, N::Integer=DEFAULT_N,
-                nq::Integer=DEFAULT_NQ, check_budget::Bool=true)
+                nq::Integer=DEFAULT_NQ, alpha::Real=DEFAULT_ALPHA,
+                check_budget::Bool=true)
+    -1 < alpha < 1 ||
+        throw(ArgumentError("alpha must lie in (-1,1) for integrability, got $alpha"))
     wall in (:free, :pinned, :clamped) ||
         throw(ArgumentError("wall must be :free, :pinned or :clamped, got $wall"))
 
@@ -208,7 +230,7 @@ function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
                 contact steps, and several-fold slower steps. The cheap fix is to RAISE L \
                 (nearly free: ~14% per doubling) rather than to lower N, since n_* is \
                 droplet-dominated. Suppress with check_budget=false.
-                """ N L budget
+                """ N L budget maxlog=1
         end
     end
     kvals = (wall === :pinned ? bessel_zeros_J0(M) : bessel_zeros_J1(M)) ./ b
@@ -219,10 +241,10 @@ function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
     bath_norm = [2 / (b * (wall === :pinned ? besselj1(k * b) : besselj0(k * b)))^2 for k in kvals]
     j0kb = [besselj0(k * b) for k in kvals]
     nodes, weights = gauss_legendre_nodes(nq)
-    com_nq = min_nq_for_exact_com(N, L)
+    com_nq = min_nq_for_exact_com(N, L, alpha)
     com_nodes, com_weights = gauss_legendre_nodes(com_nq)
-    return Params(We, Bo, Oh, M, L, N, b, h0, nq, wall, kvals, bath_norm, j0kb,
-                  nodes, weights, com_nodes, com_weights)
+    return Params(We, Bo, Oh, M, L, N, b, h0, nq, Float64(alpha), wall, kvals, bath_norm,
+                  j0kb, nodes, weights, com_nodes, com_weights)
 end
 
 """BathModeState: `a[m+1] = a_m(τ)`, `adot[m+1] = ȧ_m(τ)`, m = 0..M."""

@@ -31,7 +31,7 @@
 (shifted Legendre), assuming `x ≥ xc` already (no branch) — used inside
 quadrature/moment integrands where `x` is known by construction to lie in `[xc,1]`.
 """
-function pressure_poly_raw(chat::AbstractVector, xc, x)
+function pressure_poly_raw(chat::AbstractVector, xc, x, alpha=0.0)
     psi = (x - xc) / (1 - xc)
     N = length(chat) - 1
     Ptab = legendre_P_table(N, 2 * psi - 1)
@@ -39,7 +39,12 @@ function pressure_poly_raw(chat::AbstractVector, xc, x)
     for n in 0:N
         s += chat[n+1] * Ptab[n+1]
     end
-    return s
+    # Edge factor psi^alpha. alpha = 0 returns the plain shifted-Legendre expansion
+    # unchanged (identically, not approximately -- `one(psi)` short-circuits the power).
+    # alpha = 1/2 imposes the square-root vanishing of the contact pressure at the contact
+    # line, which is what a free, smoothly-pasted contact edge produces and what a plain
+    # polynomial resolves only algebraically. See src/types.jl `alpha` for the caveat.
+    return alpha == 0 ? s : s * (psi <= 0 ? zero(psi) : psi^alpha)
 end
 
 """
@@ -49,8 +54,9 @@ Full pressure field: `pressure_poly_raw(chat,xc,x)` for `x ≥ xc`, zero otherwi
 general evaluation (plotting, the non-intersection check eq:check-nonintersect)
 rather than the quadrature/moment integrands above.
 """
-function pressure_poly(chat::AbstractVector, xc, x)
-    return x >= xc ? pressure_poly_raw(chat, xc, x) : zero(pressure_poly_raw(chat, xc, x))
+function pressure_poly(chat::AbstractVector, xc, x, alpha=0.0)
+    return x >= xc ? pressure_poly_raw(chat, xc, x, alpha) :
+                     zero(pressure_poly_raw(chat, xc, x, alpha))
 end
 
 """
@@ -68,11 +74,11 @@ an O(θ_c²) change of linearisation convention relative to AlventosaEtAl2023's
 `∫ p P_l dx`, and reduce to it exactly at pole contact, where `x → 1` and `w → 1`.
 """
 function b_l_all(chat::AbstractVector, xc, x::AbstractVector, wq::AbstractVector,
-    P, w::AbstractVector, L::Integer)
+    P, w::AbstractVector, L::Integer, alpha=0.0)
     T = promote_type(eltype(chat), typeof(xc), eltype(w))
     out = zeros(T, L + 1)
     @inbounds for i in eachindex(x)
-        pv = pressure_poly_raw(chat, xc, x[i]) * x[i] * w[i] * wq[i]
+        pv = pressure_poly_raw(chat, xc, x[i], alpha) * x[i] * w[i] * wq[i]
         for l in 0:L
             out[l+1] += pv * P[i][l+1]
         end
@@ -94,11 +100,11 @@ pathology. Note `w > 0` requires design doc eq:check-monotone-r, enforced by the
 stepper's feasibility filter.
 """
 function com_force_closed(chat::AbstractVector, xc, x::AbstractVector,
-    wq::AbstractVector, w::AbstractVector)
+    wq::AbstractVector, w::AbstractVector, alpha=0.0)
     T = promote_type(eltype(chat), typeof(xc), eltype(w))
     s = zero(T)
     @inbounds for i in eachindex(x)
-        s += pressure_poly_raw(chat, xc, x[i]) * w[i] * wq[i]
+        s += pressure_poly_raw(chat, xc, x[i], alpha) * w[i] * wq[i]
     end
     return 2 * s
 end
