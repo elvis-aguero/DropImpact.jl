@@ -125,6 +125,58 @@ correction, replacing `h^3/12 mu_a` by `h^3 (1 + 6 Kn)/12 mu_a` (or the Fukui--K
 database correction for higher `Kn`). It is a one-line change to the flux and it removes a
 qualitative objection.
 
+## 3b. Reading the model derivation itself (`LubricationMediated2D/Sections/ModelSubsections/`)
+
+Four points that only appear in the derivation, not the results.
+
+**(i) The rim is doubly suspect, not just Knudsen-suspect.** The lubrication reduction is
+made "assuming weak impacts in which the lubrication layer will not deviate substantially
+from the horizontal" (`Subsection2.tex:14`). That is the standard slowly-varying-gap
+requirement, `|partial_x h| << 1`. It is weakest exactly where the film pinches at
+`l*` -- the same place `Kn` is largest and the same place the pressure spike is reported.
+So two independent approximations degrade together at the rim: the kinetic one (Sec. 3) and
+the geometric one underpinning lubrication scaling itself. This strengthens the conclusion
+that the rim spike should be treated as qualitative, and it is *not* repaired by the slip
+correction -- slip fixes the constitutive closure, not the aspect-ratio assumption.
+
+**(ii) The air-to-bath shear coupling is deliberately one-way.** The bath boundary
+conditions drop the air's tangential stress at `O(mu_a/mu_b)` (`Subsection1.tex:32`,
+"Disregarding terms of `O(mu_a/mu_b)`"), which for their fluids is
+`1.825e-5 / 9.78e-4 ~ 1.9%`. Meanwhile the bath's own surface velocity *does* drag the air,
+appearing as the Couette term `(partial_x phi_b + u_d) h / 2` in the flux. So momentum
+transfer is asymmetric by construction: liquid drives air, air does not shear back. This is
+consistent at the stated order and almost certainly harmless, but it should be inherited
+knowingly rather than accidentally. Viscous normal stresses in the air are likewise dropped
+(`Subsection1.tex:21`), leaving pressure as the sole air loading -- the same assumption
+SpectralKM makes.
+
+**(iii) THE KEY STRUCTURAL DIFFERENCE, and it dissolves our Gibbs problem rather than
+fighting it.** They never expand the contact pressure in a truncated smooth basis on a moving
+patch. `P` is obtained by *solving* the thin-film equation
+`partial_t h + partial_x[-(h^3/12 mu_a) partial_x P + (partial_x phi_b + u_d)h/2] = 0`
+as a free-boundary elliptic problem on a grid, with `P = 0` at `x = +-l*`
+(`Subsection2.tex:50-54`). The drop and bath then receive it only through *projections*
+(`p_hat_n`, `Subsection3.tex:29`), which is structurally the same role our `b_l` and `c_m`
+play. This is precisely why they can carry a top-hat-with-a-rim-spike and we cannot: their
+pressure lives on a grid where a near-discontinuity is representable, ours lives in a
+degree-`N` shifted-Legendre expansion on `[x_c,1]` where it provokes Gibbs oscillation and
+negative pressure. **Adopting the lubrication layer therefore replaces the object that causes
+our pointwise-pressure problem, rather than requiring us to solve it.**
+
+**(iv) A new ingredient we would have to build.** The Couette term needs the *tangential
+surface velocity* of the droplet, `u_d|_{eta_d}`. In 2D they get it to leading order as
+`u_d(R_0,theta,t) = -sum_n c_dot_n sin(n theta)` (`Subsection3.tex:52`). SpectralKM currently
+computes no analogous quantity -- we carry `beta_l` and `beta_l_dot` but never the surface
+tangential velocity field. The axisymmetric analogue (a `dP_l/dtheta`-weighted sum of
+`beta_l_dot`) is straightforward from the existing Legendre machinery, but it is genuinely new
+code and a new term in the coupling, not a rearrangement of what exists.
+
+For completeness, their droplet deformation equation is
+`c_ddot_n + 2 lambda_n c_dot_n + omega_n^2 c_n = -(n / rho_d R_0) p_hat_n` with
+`lambda_n = 2 mu_d n(n-1)/(rho_d R_0^2)`, `omega_n^2 = sigma n(n^2-1)/(rho_d R_0^3)`
+(`Subsection3.tex:42-48`) -- the 2D Fourier counterpart of our Legendre drop modes, forced by
+the pressure projection exactly as ours are, and matching Lamb/Aalilija damping rates.
+
 ## 4. Shared limitation: small `Oh`, linear interfaces
 
 Explicitly truncated at linear order in Ohnesorge, with `Oh^2` dropped
@@ -192,4 +244,10 @@ model's most novel output and it sits at `Kn ~ 0.14-0.45`.
 4. Expect this to resolve the pressure-shape question honestly: the top hat plus rim
    structure would then be an *output*, not an ansatz, and the Gibbs problem in the current
    pressure basis becomes moot because we would no longer be expanding a near-discontinuous
-   `p` in smooth polynomials on a patch.
+   `p` in smooth polynomials on a patch (see 3b(iii)).
+5. Budget for the new coupling term: the droplet's tangential surface velocity, which we do
+   not currently compute (3b(iv)).
+6. Do not expect slip alone to make the rim quantitative -- the slowly-varying-gap assumption
+   also degrades there (3b(i)). If the rim matters for a result we intend to publish, it needs
+   either a higher-order (non-lubrication) treatment of the pinch or an explicit statement of
+   what is qualitative.
