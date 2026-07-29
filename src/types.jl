@@ -60,7 +60,71 @@ for polynomials up to degree `2nq-1`.
 min_nq_for_exact_com(N::Integer, L::Integer) = cld(N + 2L + 2, 2)
 
 """
-    Params(; We, Bo, Oh, M, L, N, b, h0, nq, wall=:free)
+    resolvable_rank_estimate(; M, L, b, theta_c) -> Float64
+
+Estimate of `n_*`, the number of pressure directions the truncated bath and droplet can
+respond to at a contact angle `theta_c` -- the budget that `N + 1` must stay inside.
+
+This is a Slepian-type time--bandwidth count: restricting `span{P_l : l <= L}` to
+`theta in [0, theta_c]` leaves a plateau of dimension `O(L*theta_c/pi)` before the spectrum
+falls off super-exponentially, with a smaller additive bath contribution `k_M*r_c/pi`. The
+mechanism (droplet-dominated, delta-independent, `n_q`-independent) is pinned in CI by
+`test/test_rank_law.jl`.
+
+!!! warning "The constants are an empirical fit, not a derivation"
+    `4.5` and `1.15` were fitted at `b = 6`, `theta_c <= 0.8`, and the intercept probably
+    carries a weak `log L` dependence (Slepian transition width). Use this for provisioning
+    and for the warning in [`Params`](@ref); do not treat it as a sharp threshold. The
+    measured quantity itself is the singular-value plateau of the assembled operator, which
+    `derivations/audit_compliance_operator.jl` (AUDIT 4) computes directly.
+"""
+function resolvable_rank_estimate(; M::Integer, L::Integer, b::Real, theta_c::Real)
+    k_M = last(bessel_zeros_J1(M)) / b
+    r_c = sin(theta_c)
+    return 4.5 + 1.15 * L * theta_c / pi + k_M * r_c / pi
+end
+
+# Defaults for the NUMERICAL parameters, so that callers need supply only physics.
+#
+# These are not round numbers picked for looks; each follows from a measured cost/accuracy
+# asymmetry (walltime figures at nq=200, N=3, per contact step, this machine):
+#
+#   L = 120 -- the droplet truncation is very nearly FREE (measured 1.03x and 1.14x per
+#       doubling, 575 -> 592 -> 673 ms/step for L = 30 -> 60 -> 120) and it is the ONLY
+#       knob that buys pressure resolution, since n_* is droplet-dominated. So it is set
+#       generously: at L = 120 the budget admits N + 1 <= ~9 even at a tight theta_c = 0.1,
+#       which keeps the default N safe through contact onset, where n_* is smallest.
+#
+#   M = 60 -- the bath truncation costs LINEARLY (1.76x, 1.98x per doubling; 340 -> 597 ->
+#       1183 ms/step) and buys little rank, so it is set by accuracy alone. The M sweep
+#       converges by ~40 when L is held generous; 60 leaves margin.
+#
+#   N = 3 -- inside the budget at every contact angle reached with L = 120, and in the cheap
+#       regime: N is ~free up to the budget and explodes past it (measured 6.1x walltime at
+#       N = 12 versus N = 3, together with 90% of contact steps carrying negative pressure).
+#
+#   nq = 200 -- also linear in cost (1.95x, 1.99x per doubling). 200 comfortably exceeds
+#       `min_nq_for_exact_com(3, 120) = 123`, so the COM-force integrand is integrated
+#       exactly, with margin for the transcendental (J_0) bath projections.
+const DEFAULT_M = 60
+const DEFAULT_L = 120
+const DEFAULT_N = 3
+const DEFAULT_NQ = 200
+
+"""
+    Params(; We, Bo, Oh, b, h0, wall=:free, M, L, N, nq, check_budget=true)
+
+Only the PHYSICAL inputs are required: the Weber, Bond and Ohnesorge numbers and the bath
+geometry `b, h0`. The numerical truncations `M, L, N, nq` default to
+`$(DEFAULT_M), $(DEFAULT_L), $(DEFAULT_N), $(DEFAULT_NQ)`, chosen from the measured cost and
+resolvable-rank asymmetries documented beside `DEFAULT_M` in this file: the droplet
+truncation `L` is nearly free and is the only knob that buys pressure resolution, so it is
+set generously; `M` and `nq` cost linearly and are set by accuracy; `N` is kept inside the
+budget, where it is also cheap.
+
+Passing `N` outside the budget emits a warning (see [`resolvable_rank_estimate`](@ref));
+`check_budget=false` suppresses it. Refining `N` at fixed `M, L` cannot converge -- see
+`derivations/DIAGNOSTICS-NOTATION.md`.
 
 `wall` selects the free-surface condition at the container wall `r = b`, which fixes both
 the bath eigenvalues and the Fourier-Bessel weight (design doc eq:bessel-norm):
@@ -121,9 +185,32 @@ the bath eigenvalues and the Fourier-Bessel weight (design doc eq:bessel-norm):
              contact step, and whether `:free` and `:clamped` differ in contact time or CoR
              beyond step-controller noise at `b=6` has not been measured.
 """
-function Params(; We, Bo, Oh, M, L, N, b, h0, nq, wall::Symbol=:free)
+function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
+                M::Integer=DEFAULT_M, L::Integer=DEFAULT_L, N::Integer=DEFAULT_N,
+                nq::Integer=DEFAULT_NQ, check_budget::Bool=true)
     wall in (:free, :pinned, :clamped) ||
         throw(ArgumentError("wall must be :free, :pinned or :clamped, got $wall"))
+
+    # Guard the one failure mode that is silent: N provisioned past the resolvable-rank
+    # budget. Past it, the inner solve is ill-conditioned, the reported pointwise pressure
+    # goes negative on most contact steps, and walltime rises severalfold -- none of which
+    # announces itself in the output. Checked at theta_c = 0.15, a representative tight
+    # angle shortly after onset rather than the onset limit itself (where n_* -> its floor
+    # and no N would pass).
+    if check_budget
+        budget = 0.6 * resolvable_rank_estimate(M=M, L=L, b=b, theta_c=0.15)
+        if N + 1 > budget
+            @warn """
+                Pressure order N is outside the resolvable-rank budget.
+                N+1 = $(N+1) exceeds 0.6*n_* = $(round(budget, digits=1)) at theta_c = 0.15 \
+                (M = $M, L = $L).
+                Expect an ill-conditioned inner solve, negative pointwise pressure on most \
+                contact steps, and several-fold slower steps. The cheap fix is to RAISE L \
+                (nearly free: ~14% per doubling) rather than to lower N, since n_* is \
+                droplet-dominated. Suppress with check_budget=false.
+                """ N L budget
+        end
+    end
     kvals = (wall === :pinned ? bessel_zeros_J0(M) : bessel_zeros_J1(M)) ./ b
     # Squared-norm weight 2/‖J_0(k_m ·)‖² with ‖·‖² = ∫_0^b J_0(k_m r)² r dr, which equals
     # (b²/2)J_0(k_m b)² when J_1(k_m b) = 0 and (b²/2)J_1(k_m b)² when J_0(k_m b) = 0.

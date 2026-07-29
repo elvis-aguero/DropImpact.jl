@@ -31,7 +31,7 @@ pressure directions the truncated bath+droplet respond to above a relative thres
 This is `n_*` in `derivations/DIAGNOSTICS-NOTATION.md`.
 """
 function resolvable_rank(; M, L, theta_c, nq, delta=1e-3, thr=1e-8)
-    p = Params(We=1.0958, Bo=0.017, Oh=0.006, M=M, L=L, N=4, b=6.0, h0=3.0, nq=nq)
+    p = Params(We=1.0958, Bo=0.017, Oh=0.006, M=M, L=L, N=4, b=6.0, h0=3.0, nq=nq, check_budget=false)
     A, _, _, _, w, x, om = compliance(p, theta_c, zeros(p.L + 1), delta)
     n = length(x)
     S = [w[i] * (-A[i, j]) / om[j] for i in 1:n, j in 1:n]
@@ -43,7 +43,7 @@ end
 """Largest singular value of the same operator -- used to prove a delta-invariance test
 is not vacuous (i.e. that delta genuinely enters the assembly)."""
 function top_singular_value(; M, L, theta_c, nq, delta)
-    p = Params(We=1.0958, Bo=0.017, Oh=0.006, M=M, L=L, N=4, b=6.0, h0=3.0, nq=nq)
+    p = Params(We=1.0958, Bo=0.017, Oh=0.006, M=M, L=L, N=4, b=6.0, h0=3.0, nq=nq, check_budget=false)
     A, _, _, _, w, x, om = compliance(p, theta_c, zeros(p.L + 1), delta)
     n = length(x)
     S = [w[i] * (-A[i, j]) / om[j] for i in 1:n, j in 1:n]
@@ -52,7 +52,7 @@ end
 
 """cond of the inner Galerkin matrix in the production shifted-Legendre pressure basis."""
 function galerkin_cond(; M, L, N, theta_c, nq, delta=1e-3)
-    p = Params(We=1.0958, Bo=0.017, Oh=0.006, M=M, L=L, N=N, b=6.0, h0=3.0, nq=nq)
+    p = Params(We=1.0958, Bo=0.017, Oh=0.006, M=M, L=L, N=N, b=6.0, h0=3.0, nq=nq, check_budget=false)
     A, _, _, _, w, x, om = compliance(p, theta_c, zeros(p.L + 1), delta)
     n = length(x)
     xc = cos(theta_c)
@@ -173,4 +173,53 @@ end
         end
     end
 
+end
+
+@testset "numerical defaults (physics-only Params construction)" begin
+    # The point of the defaults: a caller supplies physics and nothing else. The values are
+    # justified beside DEFAULT_M in src/types.jl from the measured cost asymmetry (L nearly
+    # free, M and nq linear, N cheap only inside the budget).
+    p = Params(We=1.0958, Bo=0.017, Oh=0.006, b=6.0, h0=3.0)
+    @test p.M == SpectralKM.DEFAULT_M
+    @test p.L == SpectralKM.DEFAULT_L
+    @test p.N == SpectralKM.DEFAULT_N
+    @test p.nq == SpectralKM.DEFAULT_NQ
+
+    @testset "the defaults are themselves inside the budget" begin
+        # This is the invariant that matters: shipping a default that violates the budget
+        # would hand every user the ill-conditioned regime. Checked at a tight post-onset
+        # angle, not the onset limit (where n_* -> its floor and no N would pass).
+        for tc in (0.15, 0.3, 0.6)
+            budget = 0.6 * resolvable_rank_estimate(M=p.M, L=p.L, b=p.b, theta_c=tc)
+            @test p.N + 1 <= budget
+        end
+    end
+
+    @testset "defaults integrate the COM force exactly" begin
+        # nq must exceed the exactness requirement for the COM integrand at the default N,L.
+        @test p.nq >= min_nq_for_exact_com(p.N, p.L)
+    end
+
+    @testset "explicit truncations still override" begin
+        q = Params(We=1.0, Bo=0.01, Oh=0.01, M=80, L=80, N=3, b=6.0, h0=3.0, nq=200)
+        @test (q.M, q.L, q.N, q.nq) == (80, 80, 3, 200)
+    end
+
+    @testset "budget guard warns on an over-budget N and is suppressible" begin
+        # L=40 with N=12 is far outside the budget: the regime measured at 90% of contact
+        # steps carrying negative pressure and ~6x the walltime.
+        @test_logs (:warn,) match_mode=:any Params(We=1.0958, Bo=0.017, Oh=0.006,
+                                                   b=6.0, h0=3.0, L=40, N=12)
+        @test_logs Params(We=1.0958, Bo=0.017, Oh=0.006, b=6.0, h0=3.0,
+                          L=40, N=12, check_budget=false)
+    end
+
+    @testset "resolvable_rank_estimate grows with L and theta_c, mildly with M" begin
+        est(; M=60, L=120, tc=0.3) = resolvable_rank_estimate(M=M, L=L, b=6.0, theta_c=tc)
+        @test est(L=240) > est(L=120) > est(L=60)
+        @test est(tc=0.6) > est(tc=0.3) > est(tc=0.15)
+        # The bath enters, but weakly compared with the droplet: doubling M must move the
+        # estimate less than doubling L does.
+        @test (est(M=120) - est()) < (est(L=240) - est())
+    end
 end

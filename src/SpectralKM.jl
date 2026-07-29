@@ -18,6 +18,7 @@ include("timestepper.jl")
 include("postprocessing.jl")
 
 export Params, Level, SimHistory, Phase, FreeFlight, InContact
+export resolvable_rank_estimate, min_nq_for_exact_com
 export legendre_P, legendre_dP, bonnet_H
 export bessel_zeros_J1, bessel_zeros_J0
 export gauss_legendre_nodes
