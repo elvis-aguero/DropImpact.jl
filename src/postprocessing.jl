@@ -80,6 +80,56 @@ function primary_contact_time(times::Vector{Float64}, phases::Vector{Phase})
 end
 
 """
+    threshold_contact_time(times, levels; z_threshold=1.0) -> value or nothing
+
+Contact time as defined by AlventosaEtAl2023, so that a comparison against their published
+data compares like with like: **the duration for which the droplet's centre of mass lies below
+`z_threshold`**, with the crossing instants linearly interpolated.
+
+WHY THIS EXISTS, AND WHY IT IS NOT [`contact_time`](@ref). These are different quantities and
+conflating them produced a spurious 40-70% "model error" before it was caught:
+
+  * `contact_time` is the duration actually spent with `phase == InContact` -- the physical
+    contact duration, the obvious definition.
+  * AlventosaEtAl2023 measure something else, out of experimental necessity: their §2 states
+    `t_c` is "the time duration from which the top of the droplet crosses the height `z=2R` to
+    the time the top of the droplet returns to that height", because "it was impossible to
+    determine precisely when the droplets lost physical contact with the fluid; however, this
+    always occurred BEFORE the top of the drop returned to the level `z=2R`". For their model
+    and DNS they use the equivalent centre-of-mass threshold `z=R`, reporting a 2-5% difference
+    between the two choices.
+
+So their `t_c` deliberately INCLUDES post-detachment free flight, and is a trajectory metric
+rather than a contact metric. `z_threshold=1.0` is `z=R` in this package's units (lengths are
+scaled by `R`), and note `initial_level` starts the drop at exactly `z_cm=1.0`, so the
+descending crossing is `t=0` by construction.
+
+Returns `nothing` if the centre of mass never returns above the threshold within the run.
+"""
+function threshold_contact_time(times::Vector{Float64}, levels::Vector{Level};
+                                z_threshold::Float64=1.0)
+    length(levels) == length(times) || throw(ArgumentError("times and levels must align"))
+    zs = [l.com.z for l in levels]
+    # descending crossing: last index at or above threshold before first going below
+    i_down = findfirst(i -> zs[i] < z_threshold, eachindex(zs))
+    i_down === nothing && return nothing
+    t_enter = if i_down == 1
+        times[1]                        # started at the threshold, as initial_level does
+    else
+        z0, z1 = zs[i_down-1], zs[i_down]
+        times[i_down-1] + (z0 - z_threshold) / (z0 - z1) * (times[i_down] - times[i_down-1])
+    end
+    # ascending return: first index after i_down back at or above threshold
+    i_up = findfirst(i -> zs[i] >= z_threshold, i_down:length(zs))
+    i_up === nothing && return nothing
+    i_up += i_down - 1
+    i_up == 1 && return nothing
+    z0, z1 = zs[i_up-1], zs[i_up]
+    t_exit = times[i_up-1] + (z_threshold - z0) / (z1 - z0) * (times[i_up] - times[i_up-1])
+    return t_exit - t_enter
+end
+
+"""
     contact_time(times, phases) -> value
 
 Total duration spent with `phase==InContact`, summed over contiguous contact intervals.

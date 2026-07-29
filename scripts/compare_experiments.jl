@@ -16,6 +16,7 @@
 #   julia --project=. scripts/compare_experiments.jl --n 12       # more points
 #   julia --project=. scripts/compare_experiments.jl --force      # ignore the cache
 #   julia --project=. scripts/compare_experiments.jl --viscous lamb
+#   julia --project=. scripts/compare_experiments.jl --plot-only   # NO simulation: plot the cache
 #
 # ---------------------------------------------------------------------------------------------
 # TWO DEFINITIONAL CAVEATS. Both are unresolved in the source data, and the overlay is only as
@@ -43,7 +44,10 @@ using Statistics
 const ROOT = dirname(@__DIR__)
 const TC_CSV = joinpath(ROOT, "data", "experiments", "contact_time_vs_we.csv")
 const COR_CSV = joinpath(ROOT, "data", "experiments", "cor_vs_we.csv")
-const CACHE = joinpath(ROOT, "data", "experiments", "sim_cache.csv")
+# v2: `tc` now means threshold_contact_time (AlventosaEtAl2023's definition), NOT the
+# InContact duration stored by v1. v1 entries are unusable, hence the new filename rather
+# than silently mixing metrics.
+const CACHE = joinpath(ROOT, "data", "experiments", "sim_cache_v2.csv")
 const OUT_SVG = joinpath(ROOT, "data", "experiments", "comparison.svg")
 
 # ---------------------------------------------------------------- args
@@ -77,22 +81,39 @@ end
 cache_key(We, Bo, Oh, viscous) = @sprintf("%.6f|%.6f|%.6f|%s", We, Bo, Oh, viscous)
 
 function load_cache()
-    d = Dict{String,NTuple{3,Float64}}()
+    d = Dict{String,NTuple{4,Float64}}()
     (FORCE || !isfile(CACHE)) && return d
     raw = readdlm(CACHE, ','; header=true)
     rows = raw[1]
     for i in axes(rows, 1)
         k = cache_key(rows[i, 1], rows[i, 2], rows[i, 3], rows[i, 4])
-        d[k] = (Float64(rows[i, 5]), Float64(rows[i, 6]), Float64(rows[i, 7]))
+        d[k] = (Float64(rows[i, 5]), Float64(rows[i, 6]), Float64(rows[i, 7]), Float64(rows[i, 8]))
     end
     return d
 end
 
-function append_cache(We, Bo, Oh, viscous, cor, tc, pen)
+"""All cached results for `viscous`, as the plotting code expects them. Used by --plot-only,
+which runs nothing: it plots exactly the points already paid for."""
+function cached_sims(viscous)
+    isfile(CACHE) || return NamedTuple[]
+    raw = readdlm(CACHE, ','; header=true)
+    rows = raw[1]
+    out = NamedTuple[]
+    for i in axes(rows, 1)
+        String(strip(string(rows[i, 4]))) == String(viscous) || continue
+        push!(out, (We=Float64(rows[i, 1]), Bo=Float64(rows[i, 2]), Oh=Float64(rows[i, 3]),
+                    cor=Float64(rows[i, 5]), tc=Float64(rows[i, 6]),
+                    tc_incontact=Float64(rows[i, 7]), pen=Float64(rows[i, 8])))
+    end
+    return out
+end
+
+function append_cache(We, Bo, Oh, viscous, cor, tc, tci, pen)
     isnew = !isfile(CACHE)
     open(CACHE, "a") do io
-        isnew && println(io, "We,Bo,Oh,viscous,cor,contact_time,max_penetration")
-        @printf(io, "%.6f,%.6f,%.6f,%s,%.8g,%.8g,%.8g\n", We, Bo, Oh, viscous, cor, tc, pen)
+        isnew && println(io, "We,Bo,Oh,viscous,cor,tc_threshold,tc_incontact,max_penetration")
+        @printf(io, "%.6f,%.6f,%.6f,%s,%.8g,%.8g,%.8g,%.8g\n",
+                We, Bo, Oh, viscous, cor, tc, tci, pen)
     end
 end
 
@@ -103,11 +124,16 @@ function simulate(We, Bo, Oh; viscous=VISCOUS, t_end=T_END)
     ts = [l.t for l in levels]
     cor = coefficient_of_restitution(ts, levels, phases)
     cor === nothing && return nothing
-    # Our times are already nondimensionalised by tau_cap = sqrt(rho R^3/sigma), which is the
-    # t_sigma the experiments use, so contact_time is directly tc/t_sigma. Not rescaled here --
-    # if that identification is ever wrong, every comparison in this script is wrong with it.
+    # tc MUST use AlventosaEtAl2023's definition -- the time the centre of mass spends below
+    # z=R -- not `contact_time`, which is the InContact duration. Comparing the InContact
+    # duration against their published t_c produced a spurious 40-70% discrepancy.
+    tc = threshold_contact_time(ts, levels)
+    tc === nothing && return nothing
+    # Units: our times are already in tau_cap = sqrt(rho R^3/sigma) = their t_sigma, so this is
+    # directly tc/t_sigma with no rescaling.
     return (cor=cor,
-            tc=contact_time(ts, phases),
+            tc=tc,
+            tc_incontact=contact_time(ts, phases),
             pen=max_penetration_depth(levels, p.L))
 end
 
@@ -221,6 +247,38 @@ cor_km  = load_figure(COR_CSV, "cor", "km_model")
         length(tc_exp.We), minimum(tc_exp.We), maximum(tc_exp.We), minimum(tc_exp.val), maximum(tc_exp.val))
 @printf("secondary        CoR                     : %d experimental points\n", length(cor_exp.We))
 
+if "--plot-only" in ARGS
+    sims = cached_sims(VISCOUS)
+    if isempty(sims)
+        println("\n--plot-only: no cached results for viscous = $(VISCOUS); nothing to plot.")
+        exit(0)
+    end
+    @printf("\n--plot-only: %d cached points for viscous = %s. RUNNING NOTHING.\n",
+            length(sims), VISCOUS)
+    @printf("%-4s %-10s %-10s %-10s %-13s %-13s %-9s %-9s\n",
+            "#","We","Bo","Oh","tc(threshold)","tc(InContact)","cor","pen")
+    for (i, s_) in enumerate(sort(sims; by=x -> x.We))
+        @printf("%-4d %-10.4g %-10.4g %-10.4g %-13.4f %-13.4f %-9.4f %-9.4f\n",
+                i, s_.We, s_.Bo, s_.Oh, s_.tc, s_.tc_incontact, s_.cor, s_.pen)
+    end
+    panels = [(label="tc / tsigma  (TARGET)", exp=tc_exp, dns=tc_dns, km=tc_km, simval=x -> x.tc),
+              (label="coefficient of restitution", exp=cor_exp, dns=cor_dns, km=cor_km, simval=x -> x.cor)]
+    write_svg(OUT_SVG, panels, sims)
+    @printf("\nwrote %s\n", relpath(OUT_SVG, ROOT))
+    println("\nCONTACT TIME residuals vs experiment (median within +-0.15 dex in We):")
+    @printf("%-10s %-12s %-12s %-14s %-12s %-s\n","We","tc_sim","tc_exp_med","tc_exp_iqr","sim - med","within unc?")
+    for s_ in sort(sims; by=x -> x.We)
+        sel = findall(j -> abs(log10(tc_exp.We[j]) - log10(s_.We)) < 0.15, eachindex(tc_exp.We))
+        isempty(sel) && continue
+        m = median(tc_exp.val[sel]); q = quantile(tc_exp.val[sel], [0.25, 0.75])
+        u = median(filter(isfinite, tc_exp.val_unc[sel]))
+        @printf("%-10.4g %-12.4f %-12.4f %-14s %+-12.4f %-s\n", s_.We, s_.tc, m,
+                @sprintf("%.3f-%.3f", q[1], q[2]), s_.tc - m,
+                (isfinite(u) && abs(s_.tc - m) <= u) ? "yes" : "NO")
+    end
+    exit(0)
+end
+
 cache = load_cache()
 @printf("cache: %d entries%s\n", length(cache), FORCE ? " (ignored, --force)" : "")
 
@@ -236,26 +294,26 @@ if nnew > 0 && !("--yes" in ARGS)
     exit(0)
 end
 
-@printf("\n%-4s %-10s %-10s %-10s %-6s %-11s %-10s %-9s %-s\n",
-        "#", "We", "Bo", "Oh", "n_exp", "tc/tsigma", "cor", "pen", "source")
+@printf("\n%-4s %-10s %-10s %-10s %-6s %-13s %-13s %-9s %-9s %-s\n",
+        "#", "We", "Bo", "Oh", "n_exp", "tc(threshold)", "tc(InContact)", "cor", "pen", "source")
 flush(stdout)
 sims = NamedTuple[]
 for (i, pt) in enumerate(pts)
     k = cache_key(pt.We, pt.Bo, pt.Oh, VISCOUS)
     if haskey(cache, k)
-        cor, tc, pen = cache[k]; src = "cache"
+        cor, tc, tci, pen = cache[k]; src = "cache"
     else
         r = simulate(pt.We, pt.Bo, pt.Oh)
         if r === nothing
             @printf("%-4d %-10.4g %-10.4g %-10.4g %-6d %-s\n", i, pt.We, pt.Bo, pt.Oh, pt.nexp,
                     "NO REBOUND within t_end"); flush(stdout); continue
         end
-        cor, tc, pen = r.cor, r.tc, r.pen
-        append_cache(pt.We, pt.Bo, pt.Oh, VISCOUS, cor, tc, pen); src = "ran"
+        cor, tc, tci, pen = r.cor, r.tc, r.tc_incontact, r.pen
+        append_cache(pt.We, pt.Bo, pt.Oh, VISCOUS, cor, tc, tci, pen); src = "ran"
     end
-    push!(sims, (We=pt.We, Bo=pt.Bo, Oh=pt.Oh, cor=cor, tc=tc, pen=pen))
-    @printf("%-4d %-10.4g %-10.4g %-10.4g %-6d %-11.4f %-10.4f %-9.4f %-s\n",
-            i, pt.We, pt.Bo, pt.Oh, pt.nexp, tc, cor, pen, src)
+    push!(sims, (We=pt.We, Bo=pt.Bo, Oh=pt.Oh, cor=cor, tc=tc, tc_incontact=tci, pen=pen))
+    @printf("%-4d %-10.4g %-10.4g %-10.4g %-6d %-13.4f %-13.4f %-9.4f %-9.4f %-s\n",
+            i, pt.We, pt.Bo, pt.Oh, pt.nexp, tc, tci, cor, pen, src)
     flush(stdout)
 end
 isempty(sims) && (println("\nnothing simulated; no overlay written."); exit(0))
@@ -280,9 +338,13 @@ end
 println("""
 
 CAVEATS bounding what this shows:
-  * contact time is compared directly: our times are already in units of
-    tau_cap = sqrt(rho R^3 / sigma), taken to be the experiments' t_sigma. If that
-    identification is wrong, every number above is wrong with it.
+  * contact time uses AlventosaEtAl2023's DEFINITION, not the InContact duration: their t_c is
+    the interval between the droplet top crossing z=2R downward and returning to it (centre of
+    mass crossing z=R for their model/DNS), which deliberately includes post-detachment free
+    flight because detachment is not observable in their setup. Both are printed above; they are
+    different quantities and an earlier revision of this script compared the wrong one, which
+    manufactured a 40-70% "error".
+  * units need no rescaling: our times are already in tau_cap = sqrt(rho R^3/sigma) = t_sigma.
   * the CoR panel's experimental values come from the same published figure, but note the
     separate raw dataset (rebound_low_weber_raw.csv) reports a `cor` that is NOT Vo/Vi, so
     restitution definitions differ between sources. Contact time has no such ambiguity, which

@@ -20,5 +20,5 @@ derivations/*.synctex.gz
 output/media/*.mp4
 
 # comparison-run outputs: regenerate with scripts/compare_experiments.jl
-data/experiments/sim_cache.csv
+data/experiments/sim_cache_v2.csv
 data/experiments/comparison.svg

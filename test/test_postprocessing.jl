@@ -75,3 +75,59 @@ end
     @test count(==(InContact), phases) == length(diag)
     @test phases[1] == FreeFlight              # the initial level is always free flight
 end
+
+@testset "threshold_contact_time (AlventosaEtAl2023's definition)" begin
+    # Their t_c is the time the centre of mass spends BELOW z=R, with crossings interpolated --
+    # a trajectory metric that deliberately includes post-detachment free flight. It is NOT the
+    # InContact duration that `contact_time` reports, and conflating the two produced a spurious
+    # 40-70% discrepancy against their published data.
+    mk(z) = Level(BathModeState(2), DropModeState(2), COMState(z, 0.0), 0.0, 0.0, nothing)
+
+    @testset "exact on a synthetic parabolic dip" begin
+        # z(t) = 1 + (t-1)^2 - 0.25 dips below 1 at t = 0.5 and returns at t = 1.5.
+        ts = collect(0.0:0.005:3.0)
+        zs = @. 1 + (ts - 1)^2 - 0.25
+        lv = [mk(z) for z in zs]
+        tc = threshold_contact_time(ts, lv)
+        @test tc !== nothing
+        @test isapprox(tc, 1.0; atol=2e-3)      # interpolation, so tight but not exact
+    end
+
+    @testset "starting exactly at the threshold (as initial_level does)" begin
+        # initial_level puts z_cm at exactly 1.0, so the descending crossing must be t=0
+        # rather than being missed or interpolated from a nonexistent earlier sample.
+        ts = collect(0.0:0.01:2.0)
+        zs = @. 1 - sin(pi * ts / 1.0) * (ts <= 1.0)
+        lv = [mk(z) for z in zs]
+        tc = threshold_contact_time(ts, lv)
+        @test tc !== nothing
+        @test isapprox(tc, 1.0; atol=0.02)
+    end
+
+    @testset "returns nothing when the drop never comes back up" begin
+        ts = collect(0.0:0.01:1.0)
+        lv = [mk(1.0 - t) for t in ts]
+        @test threshold_contact_time(ts, lv) === nothing
+    end
+
+    @testset "returns nothing when the drop never descends" begin
+        ts = collect(0.0:0.01:1.0)
+        lv = [mk(1.0 + t) for t in ts]
+        @test threshold_contact_time(ts, lv) === nothing
+    end
+
+    @testset "threshold is configurable and monotone in it" begin
+        ts = collect(0.0:0.002:3.0)
+        zs = @. 1 + (ts - 1)^2 - 0.25
+        lv = [mk(z) for z in zs]
+        # a LOWER threshold is crossed later and exited earlier => shorter interval
+        @test threshold_contact_time(ts, lv; z_threshold=0.9) <
+              threshold_contact_time(ts, lv; z_threshold=1.0)
+    end
+
+    @testset "mismatched inputs are rejected rather than silently misread" begin
+        ts = collect(0.0:0.1:1.0)
+        lv = [mk(1.0) for _ in 1:3]
+        @test_throws ArgumentError threshold_contact_time(ts, lv)
+    end
+end
