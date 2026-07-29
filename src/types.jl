@@ -120,8 +120,14 @@ const DEFAULT_NQ = 200
 #            asymptotics. The published model, and what DropRebound.jl/DropSolver uses too.
 #   :reid -- exact roots of Reid's (1960) characteristic equation, valid at arbitrary Oh.
 #
-# DEFAULT IS :lamb, so the published model stays reproducible bit-for-bit. Switch to :reid
-# for larger Oh, or when high-l drop damping matters: measured against Reid, Lamb
+# DEFAULT IS :reid. The reasoning, since this was reversed after review: at the small Oh where
+# experiments exist, the two are experimentally INDISTINGUISHABLE (CoR identical to 4 digits),
+# so :reid cannot be worse against any available data. At Oh >~ 0.05, :lamb is PROVABLY wrong by
+# 23-97% while :reid is exact in theory and merely untested. Defaulting to a known-invalid model
+# in the regime where neither is validated is the wrong trade -- :reid weakly dominates. Pass
+# viscous=:lamb to reproduce the published small-Oh model bit-for-bit.
+#
+# Measured against Reid, Lamb
 # OVERPREDICTS the damping by 4.1% at l=2 and 22.9% at l=120 even at production Oh = 0.006,
 # and by 23-97% across l = 2..16 at Oh = 0.1. See src/reid.jl for the table and for what the
 # substitution does and does not capture.
@@ -142,13 +148,19 @@ const DEFAULT_NQ = 200
 #                  lambda up to ~1e3 and the run completes cleanly -- the stiff path works in a
 #                  real simulation, not only in unit tests.
 #
-# WHAT IS STILL NOT ESTABLISHED, and the reason this is not yet the default: "more faithful to
-# linear viscous theory" is NOT "matches experiment better", and only the former is verified.
+# WHAT IS STILL NOT ESTABLISHED (a caveat on the claim, no longer a reason to withhold the
+# default): "more faithful to linear viscous theory" is NOT "matches experiment better", and
+# only the former is verified.
 # The +1.7% CoR shift at Oh = 0.2 is the one place the change is visible, and it is exactly
 # there that nothing has been compared against DNS or experiment. If that shift moves AWAY from
 # ground truth it would indicate the two-pole forcing gap (or something else) dominating at
-# moderate Oh. A comparison against Alventosa et al. or DNS at Oh >~ 0.05 is the missing piece.
-const DEFAULT_VISCOUS = :lamb
+# moderate Oh. A comparison against Alventosa et al. or DNS at Oh >~ 0.05 remains worth doing --
+# but note it can only ever CONFIRM or REFINE :reid, since :lamb is already known wrong there.
+#
+# NOTE FOR THE PAPER: this switch moves t_c by 0.5% at production Oh (3.8145 -> 3.7942) with CoR
+# unchanged to 4 digits. Small, but not nothing -- any figure regenerated after this commit
+# differs slightly from one generated before it, and the closure should be named in the text.
+const DEFAULT_VISCOUS = :reid
 
 """
     Params(; We, Bo, Oh, b, h0, wall=:free, M, L, N, nq, check_budget=true)

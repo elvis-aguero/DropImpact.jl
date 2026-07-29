@@ -309,9 +309,11 @@
     end
 
     @testset "selecting :reid does not disturb the published model" begin
-        pl = Params(We=1.0958, Bo=0.017, Oh=0.006, b=6.0, h0=3.0, L=12)
+        pl = Params(We=1.0958, Bo=0.017, Oh=0.006, b=6.0, h0=3.0, L=12, viscous=:lamb)
         pr = Params(We=1.0958, Bo=0.017, Oh=0.006, b=6.0, h0=3.0, L=12, viscous=:reid)
-        @test pl.viscous === :lamb              # default is the published model
+        # the DEFAULT is now :reid; :lamb must remain reachable and bit-exact
+        @test Params(We=1.0958, Bo=0.017, Oh=0.006, b=6.0, h0=3.0, L=12).viscous === :reid
+        @test pl.viscous === :lamb              # explicit request honoured
         @test pr.viscous === :reid
         # :lamb path must be bit-identical to the hardcoded formulas it replaced.
         for l in 2:12
@@ -331,7 +333,9 @@
             lam, gam = drop_affine(d0, d0, p, dt, dt)
             @test all(isfinite, lam) && all(isfinite, gam)
         end
-        pl = Params(We=1.0958, Bo=0.017, Oh=0.1, b=6.0, h0=3.0, L=8)
+        # BOTH must be explicit: relying on the default here silently compared :reid with
+        # itself once the default flipped, and the two assertions below became vacuous.
+        pl = Params(We=1.0958, Bo=0.017, Oh=0.1, b=6.0, h0=3.0, L=8, viscous=:lamb)
         pr = Params(We=1.0958, Bo=0.017, Oh=0.1, b=6.0, h0=3.0, L=8, viscous=:reid)
         d0 = DropModeState(pl.L)
         lam_l, _ = drop_affine(d0, d0, pl, dt, dt)
