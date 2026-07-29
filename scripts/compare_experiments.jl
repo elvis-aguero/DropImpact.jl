@@ -18,6 +18,18 @@
 #   julia --project=. scripts/compare_experiments.jl --viscous lamb
 #   julia --project=. scripts/compare_experiments.jl --plot-only   # NO simulation: plot the cache
 #
+# PARALLELISM. The points are completely independent, so the sweep is embarrassingly parallel and
+# should not be run as a serial loop. Use --only to run one point into its own cache shard, fan
+# out with xargs, then merge and plot:
+#
+#   seq 1 10 | xargs -P 6 -I{} julia --project=. scripts/compare_experiments.jl \
+#       --n 10 --viscous reid --only {} --yes
+#   julia --project=. scripts/compare_experiments.jl --merge-shards --viscous reid
+#   julia --project=. scripts/compare_experiments.jl --plot-only --viscous reid
+#
+# Each shard is a separate file, so there is no concurrent-append race on the cache. Keep the
+# fan-out below the core count if anything else is running on the machine.
+#
 # ---------------------------------------------------------------------------------------------
 # TWO DEFINITIONAL CAVEATS. Both are unresolved in the source data, and the overlay is only as
 # meaningful as they allow. Stated here rather than buried, because a plot silently comparing
@@ -61,6 +73,10 @@ const NPOINTS = parse(Int, getarg("--n", "8"))
 const FORCE = "--force" in ARGS
 const VISCOUS = Symbol(getarg("--viscous", "reid"))
 const T_END = parse(Float64, getarg("--tend", "12.0"))
+const ONLY = let v = getarg("--only", ""); v == "" ? nothing : parse(Int, v) end
+const MERGE = "--merge-shards" in ARGS
+shard_path(i) = joinpath(ROOT, "data", "experiments",
+                         "shard_$(VISCOUS)_$(lpad(i, 3, '0')).csv")
 
 # ---------------------------------------------------------------- experiments
 """
@@ -108,10 +124,46 @@ function cached_sims(viscous)
     return out
 end
 
+const CACHE_HEADER = "We,Bo,Oh,viscous,cor,tc_threshold,tc_incontact,max_penetration"
+
+"""Concatenate per-point shards into the main cache, de-duplicating on the cache key."""
+function merge_shards()
+    seen = Set{String}()
+    rows = String[]
+    if isfile(CACHE)
+        for (i, ln) in enumerate(eachline(CACHE))
+            i == 1 && continue
+            f = split(ln, ',')
+            k = cache_key(parse(Float64, f[1]), parse(Float64, f[2]), parse(Float64, f[3]), f[4])
+            k in seen || (push!(seen, k); push!(rows, ln))
+        end
+    end
+    shards = filter(f -> startswith(basename(f), "shard_"),
+                    readdir(joinpath(ROOT, "data", "experiments"); join=true))
+    nadd = 0
+    for sf in shards
+        for (i, ln) in enumerate(eachline(sf))
+            i == 1 && continue
+            isempty(strip(ln)) && continue
+            f = split(ln, ',')
+            k = cache_key(parse(Float64, f[1]), parse(Float64, f[2]), parse(Float64, f[3]), f[4])
+            k in seen && continue
+            push!(seen, k); push!(rows, ln); nadd += 1
+        end
+    end
+    open(CACHE, "w") do io
+        println(io, CACHE_HEADER)
+        for r in rows; println(io, r); end
+    end
+    @printf("merged %d shard file(s): %d new rows, %d total in %s\n",
+            length(shards), nadd, length(rows), relpath(CACHE, ROOT))
+end
+
 function append_cache(We, Bo, Oh, viscous, cor, tc, tci, pen)
-    isnew = !isfile(CACHE)
-    open(CACHE, "a") do io
-        isnew && println(io, "We,Bo,Oh,viscous,cor,tc_threshold,tc_incontact,max_penetration")
+    path = ONLY === nothing ? CACHE : shard_path(ONLY)
+    isnew = !isfile(path)
+    open(path, "a") do io
+        isnew && println(io, CACHE_HEADER)
         @printf(io, "%.6f,%.6f,%.6f,%s,%.8g,%.8g,%.8g,%.8g\n",
                 We, Bo, Oh, viscous, cor, tc, tci, pen)
     end
@@ -247,6 +299,11 @@ cor_km  = load_figure(COR_CSV, "cor", "km_model")
         length(tc_exp.We), minimum(tc_exp.We), maximum(tc_exp.We), minimum(tc_exp.val), maximum(tc_exp.val))
 @printf("secondary        CoR                     : %d experimental points\n", length(cor_exp.We))
 
+if MERGE
+    merge_shards()
+    exit(0)
+end
+
 if "--plot-only" in ARGS
     sims = cached_sims(VISCOUS)
     if isempty(sims)
@@ -283,6 +340,11 @@ cache = load_cache()
 @printf("cache: %d entries%s\n", length(cache), FORCE ? " (ignored, --force)" : "")
 
 pts = choose_points(tc_exp, NPOINTS)
+if ONLY !== nothing
+    (1 <= ONLY <= length(pts)) || (println("--only $ONLY out of range 1..$(length(pts))"); exit(1))
+    pts = pts[ONLY:ONLY]
+    @printf("--only %d: running a single point into %s\n", ONLY, relpath(shard_path(ONLY), ROOT))
+end
 nnew = count(pt -> !haskey(cache, cache_key(pt.We, pt.Bo, pt.Oh, VISCOUS)), pts)
 @printf("\n%d representative points, %d already cached, %d to RUN (~2 min each)\n",
         length(pts), length(pts) - nnew, nnew)
@@ -317,6 +379,10 @@ for (i, pt) in enumerate(pts)
     flush(stdout)
 end
 isempty(sims) && (println("\nnothing simulated; no overlay written."); exit(0))
+if ONLY !== nothing
+    println("\n--only mode: shard written, no overlay. Merge with --merge-shards, then --plot-only.")
+    exit(0)
+end
 
 panels = [(label="tc / tsigma  (TARGET)", exp=tc_exp, dns=tc_dns, km=tc_km, simval=s -> s.tc),
           (label="coefficient of restitution", exp=cor_exp, dns=cor_dns, km=cor_km, simval=s -> s.cor)]
