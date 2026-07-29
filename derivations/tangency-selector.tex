@@ -1,0 +1,164 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,hyperref}
+\usepackage[T1]{fontenc}
+\newcommand{\Oh}{\mathrm{Oh}}
+\newcommand{\We}{\mathrm{We}}
+\title{The contact-edge selector: why $\theta_c=\inf\mathcal F$ fails,\\
+{\large and the closed-form tangency residual that replaces it}}
+\author{SpectralKM derivations}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{The symptom}
+
+Measured against the published data of \cite{AlventosaEtAl2023}, this model overpredicts the
+contact time by roughly a factor of two: $t_c/t_\sigma$ of $4.9$--$6.1$ against an experimental
+$2.4$--$4.0$, and nearly \emph{flat} in $\We$ where the experiment decreases. Three candidate
+causes were tested and eliminated:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Candidate & Test & Outcome \\
+\midrule
+metric definition & \path{threshold_contact_time} vs.\ \path{contact_time} & real but small: $0.6$ of $\sim2.0$ \\
+drop viscous closure & \texttt{:reid} vs.\ \texttt{:lamb} & differ in the 4th digit \\
+bath radius (reflected waves) & \path{debug_bath_radius_sensitivity.jl} & flat: $4.9402,4.9613,4.9614,4.9614$ \\
+ & $b=6,12,20,30$, $M\propto b$ & for $b=6,12,20,30$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The bath-radius result deserves a note: $b=6$ is flagged as unvalidated in
+the open-questions section of \path{provenance.tex} and in \path{paper-formulation.tex}, with a prior
+measurement of $11\%$ CoR movement between $b=6$ and $b=4$. It is a genuine open question and it
+is \emph{not} the cause of this symptom.
+
+\section{What is actually wrong}
+
+Tracing a contact (\path{debug_contact_exit_trace.jl}, \path{debug_feasibility_collapse.jl}):
+
+\begin{itemize}
+  \item the net force $f\le0$ on \textbf{0 of 221} steps -- it decays asymptotically to
+        $1.4\times10^{-8}$ from above and never reverses, so the $f\le0$ exit test never fires
+        and contact terminates only at the $\theta_c$ floor;
+  \item $63\%$ of the contact duration occurs \emph{after} the droplet has begun rising;
+  \item at $t=0.009$ the non-intersection predicate is false for all $\theta<0.0492$ and
+        $\inf\mathcal F=0.0492$; one step later, at $t=0.010$, it is true even at
+        $\theta=10^{-4}$, $\inf\mathcal F$ collapses by a factor of $200$, and the patch never
+        recovers.
+\end{itemize}
+
+The search is not at fault. A brute-force scan (\path{debug_selector_rate_limit.jl}) shows
+\path{select_theta_c} returning within $0.3$--$4\%$ of the true $\inf\mathcal F$ at every step.
+The \emph{rule} is at fault.
+
+\section{The degeneracy, stated precisely}
+
+Write the gap as $C(\theta,\tau)=\eta(r(\theta,\tau),\tau)-z_{cm}+z_d(\theta,\tau)$. The
+kinematic match imposes $C=0$ on $[0,\theta_c]$; physical consistency requires $C<0$ beyond the
+edge. Continuing just outside, $C(\theta)\simeq a\,(\theta-\theta_c)$ with
+\begin{equation}
+  a(\theta_c) := \partial_\theta C\big|_{\theta_c}\text{,}
+\end{equation}
+so non-overlap is the inequality $a(\theta_c)\le0$ and the feasible set is
+$\mathcal F=\{\theta_c: a(\theta_c)\le0\}$. The two rules are then
+\begin{equation}
+  \text{current: } \theta_c=\inf\mathcal F\text{,}\qquad
+  \text{tangency \eqref{eq:tangency}: } a(\theta_c)=0\text{.}
+\end{equation}
+
+\begin{quote}
+If $a(\theta_c)<0$ for every $\theta_c>0$ -- the measured situation from $t=0.010$ onward --
+then $\mathcal F=(0,\theta_{\max}]$ and $\inf\mathcal F=0$, \emph{regardless of the shape or
+magnitude of $a$}.
+\end{quote}
+
+This is the whole failure. The infimum rule uses only the \textbf{sign} of $a$ and never its
+magnitude, so it returns the same answer whether the surfaces are barely separated or widely so.
+It carries information only while the constraint is \emph{binding}; the moment non-intersection
+goes inactive, it degenerates to $\theta_c=0$ -- not because the physics says the patch vanishes,
+but because the rule has nothing left to determine it with. Verified symbolically in
+\path{derivations/cas_tangency_residual.py}, which also exhibits an $a<0$ example where
+$\inf\mathcal F=0$ while $\arg\min|a|$ is interior.
+
+Two further facts from the scan bear on the rule's stated justification. Positivity ($p>0$) holds
+\emph{at} the collapsed patch, so complementarity -- which \path{select_theta_c}'s docstring cites
+as its basis -- does not forbid it. And the band's upper edge is set by $f<0$ and $p<0$, i.e.\ by
+suction, not by \texttt{eq:check-monotone-r}. The rule's original evidence was a single measurement
+at one step at onset, precisely where the constraint \emph{is} active and the rule does work.
+
+\section{The closed-form tangency residual}
+
+\texttt{eq:tangency-selector} is $T=\partial_\theta C|_{\theta_c}$, currently evaluated in
+\path{src/residual.jl} by a centred finite difference with $h=10^{-6}$.
+
+\paragraph{A claim withdrawn.} An earlier draft of this note asserted that differencing a
+Fourier--Bessel sum at $h=10^{-6}$ ``discards roughly half the available digits'' and was
+therefore unfit to root-find. \emph{That was wrong, and the test written to check it said so}:
+against a Richardson-extrapolated reference at $h=10^{-3}$, the existing finite-difference
+residual agrees to $\texttt{rtol}=10^{-8}$ at $\theta=0.25,0.6,1.1$ (\path{test/test_selector.jl}).
+Accuracy is not the problem. The closed form below is still worth having --- it removes a
+step-size parameter, and it differentiates cleanly under \path{ForwardDiff} where a difference of
+a difference would not --- but the case for it is structural, not numerical, and the fix to the
+selector does not depend on it. With
+$\xi(\theta)=1+\sum_l\beta_lP_l(\cos\theta)$, $r=\xi\sin\theta$, $z_d=-\xi\cos\theta$ and
+$\eta(r)=\sum_ma_mJ_0(k_mr)$, the chain rule gives
+\begin{equation}
+  \boxed{\;T=\eta'(r)\,\big[\xi'\sin\theta+\xi\cos\theta\big]
+           +\big[\xi\sin\theta-\xi'\cos\theta\big]\;}
+  \label{eq:tangency}
+\end{equation}
+with
+\begin{equation}
+  \xi'(\theta)=-\sin\theta\sum_l\beta_l P_l'(\cos\theta)\text{,}\qquad
+  \eta'(r)=-\sum_m a_m k_m J_1(k_m r)\text{.}
+\end{equation}
+\eqref{eq:tangency} is verified against symbolic differentiation of the composed expression
+(difference exactly zero), and against the existing numerical residual in
+\path{test/test_selector.jl}.
+
+\section{The pole degeneracy is physical, not algebraic}
+
+$T\equiv0$ at $\theta=0$ and $\theta=\pi$ for any state -- \texttt{eq:tangency-degenerate}. Worth
+recording \emph{how} the CAS established this, because the first attempt was wrong: with $\eta$
+left as an abstract function the CAS correctly \textbf{refused}, returning
+$T(0)=\xi(0)\,\eta'(0)$, since nothing in the chain rule makes $\eta'(0)$ vanish. It vanishes
+because of \textbf{axisymmetry}, through $J_1(0)=0$; and $\xi'$ carries a factor $\sin\theta$, so
+it vanishes at both poles too. Substituting the concrete expressions, $T\to0$ at both poles for
+$l=2$ and $l=3$ and arbitrary $\beta_l,a_m,k_m,z_{cm}$.
+
+Two implementation consequences follow. A seed is required at onset, which
+\path{onset_theta_c} already supplies from the geometric crossing $C=0$; and the residual must be
+root-found \emph{away} from $\theta=0$, never bracketed from it.
+
+\section{The replacement rule}
+
+Select $\theta_c$ as a root of \eqref{eq:tangency}, retaining
+\texttt{eq:check-nonintersect} and \texttt{eq:check-monotone-r} as a \emph{feasibility filter} over
+candidates -- which is what \path{paper-formulation.tex} describes, and what
+\cite{AlventosaEtAl2023} and \cite{GaleanoRios2017} do. Because $\eta(r(\theta))$ is a sum of
+oscillatory $J_0$ terms, $T$ can change sign more than once on $(0,\pi)$, so a plain bisection on
+a sign change is not safe; the argmin form of \texttt{eq:theta-c-argmin} over admissible candidates
+is used instead, seeded from the previous step and, at onset, from \path{onset_theta_c}.
+
+\section{Scope}
+
+This note establishes that the current rule is degenerate and derives the residual that replaces
+it. It does \emph{not} establish that tangency selection reproduces the experimental $t_c$: that
+is a measurement, made after implementation, against
+\path{data/experiments/contact_time_vs_we.csv} and the $r_c(t)$ series of Figure 6(b). Nor does it
+revisit the upper edge of the admissible band, where $f<0$ and $p<0$ already exclude wide patches;
+whether that exclusion is itself too aggressive is a separate question.
+
+\begin{thebibliography}{9}
+\bibitem{AlventosaEtAl2023} L.~F.~L. Alventosa, R. Cimpeanu, D.~M. Harris,
+  \emph{Inertio-capillary rebound of a droplet impacting a fluid bath}, JFM (2023).
+\bibitem{GaleanoRios2017} C.~A. Galeano-R\'ios, P.~A. Milewski, J.-M. Vanden-Broeck,
+  \emph{Non-wetting impact of a sphere onto a bath}, JFM (2017).
+\end{thebibliography}
+
+\end{document}
