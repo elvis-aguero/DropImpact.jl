@@ -48,14 +48,38 @@ THREE SOURCES.  Only C is the right problem.
      CONTACT TIME: its columns are sigma, mu, rho, Dn, class, R, Vi, Vo, ho, eps, We, Bo, Oh.
      Retained as a broad secondary CoR dataset only.
 
-  C. "lowWeberComparison.csv" (km-dropplet-onto-bath/matlab/1_code/Figures/) -- THE BATH
-     dataset, and the one to compare against: 153 model runs at N = 60 carrying Westar, Bo,
+  C. "lowWeberComparison.csv" (km-dropplet-onto-bath/matlab/1_code/Figures/) -- a BATH dataset,
+     but MODEL OUTPUT ONLY, not experiment: 153 model runs at N = 60 carrying Westar, Bo,
      Oh, max_deflection, CONTACT TIME and coefficient of restitution, with contact time in
      4.4408..8.0946.  It includes the water point Bo = 0.016644, Oh = 0.006165 exactly, where
      it gives 4.5286 -- against 4.5297 from running the reference MATLAB directly and 4.4432
      from this model.  Copied through verbatim as bath_km_contact_time.csv; the metric is the
      trajectory threshold (centre of mass below R), i.e. threshold_contact_time, NOT the
-     in-contact duration.
+     in-contact duration.  Being model output, it supports a CODE-TO-CODE cross-check and
+     nothing stronger -- it is not validation.  For that, see D.
+
+  D. THE ACTUAL BATH EXPERIMENTS, and the only genuine validation target here:
+     data/experiments/bath_experiment_{water,oil}.csv, produced by
+     scripts/extract_bath_experiment.m (MATLAB, reads the authors' source .fig files in
+     km-dropplet-onto-bath/matlab/1_code/Figures/).  17 measured points with standard
+     deviations over at least 5 trials each -- 5 for water at Bo = 0.017, Oh = 0.006 and 12 for
+     5 cSt oil at Bo = 0.056, Oh = 0.058 -- carrying contact time, coefficient of restitution
+     and maximum penetration depth.
+
+     These were NOT in the digitised CSV export that already existed in that repository: the
+     experimental points are stored as `errorbar` objects, one per point, and an export that
+     walks only `line` children drops every one of them.  That export contains the eight model
+     curves of the figure and none of the five water experimental points, which is why the
+     experiments appeared to be missing entirely.
+
+     METRIC MISMATCH, stated by the authors (paper sec. 4.2) and NOT to be papered over: the
+     EXPERIMENT times the north pole across z = 2R, because detachment was not optically
+     resolvable; the MODEL and DNS use the centre of mass across z = R.  The authors quote a
+     typical difference of 5% for water and 2% for oil.  threshold_contact_time implements the
+     model convention, so a residual of that order against these columns comes from the
+     definition alone.  The paper further states its own model and DNS "slightly underpredict
+     the dimensionless contact time at intermediate We".  Measured here at We = 0.7:
+     this model 4.5039 against experiment 4.6628 +/- 0.1887, i.e. -3.4%, or 0.84 sd.
 
 NOT INTERPRETED, deliberately, because guessing would give a plausible-looking wrong
 comparison:

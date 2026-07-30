@@ -82,6 +82,38 @@ $4.4432$ --- squarely in the bath band. The earlier ``puzzle'' of $4.53$ against
 \texttt{km\_model} value of $2.41$, which appeared to contradict the paper's own claim that $t_c$
 is nearly $\Oh$-independent, was never a puzzle: those are a bath and a rigid wall.
 
+\paragraph{Against experiment, not against another code.} All of the above is
+model-against-model, which settles the problem identity and nothing else. The bath
+\emph{experiments} are now in the repository as \path{bath_experiment_water.csv} and
+\path{bath_experiment_oil.csv}: $17$ measured points with standard deviations over at least five
+trials each, extracted by \path{scripts/extract_bath_experiment.m} from the authors' own
+\path{.fig} files. They were absent from the digitised CSV export that already existed, because
+the experimental points are stored as \texttt{errorbar} objects --- one per point --- and an
+export that walks only \texttt{line} children drops every one of them; that export holds the
+figure's eight model curves and none of its five water points.
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+ & $\We$ & $t_c/t_\sigma$ & \\
+\midrule
+experiment (water, $\Bo=0.017$, $\Oh=0.006$) & $0.725$ & $4.6628\pm0.1887$ & $\ge5$ trials \\
+this model, \path{threshold_contact_time}    & $0.700$ & $4.5039$ & \\
+\midrule
+residual & & $-3.4\%$ & $0.84\,\sigma$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Two things keep that number honest. The metrics are \emph{not} the same: the experiment times the
+north pole across $z=2R$, detachment not being optically resolvable, whereas the model convention
+--- which \path{threshold_contact_time} implements --- is the centre of mass across $z=R$, and the
+authors quote a typical $5\%$ difference between the two for water. And the paper states that its
+own quasi-potential model and DNS ``slightly underpredict the dimensionless contact time at
+intermediate $\We$'', attributing it to neglected nonlinear deformation. A residual of $-3.4\%$ is
+therefore consistent with the definition offset alone, and its sign is the one the authors report.
+Pinned in \path{test/test_bath_reference.jl}.
+
 \paragraph{A second, compounding error.} Independently of the wrong-problem error, the comparison
 script selected parameters by \emph{binning on $\We$ alone}: it split $\log_{10}\We$ into equal
 intervals over the $931$ points and took the median $\We$, $\Bo$ and $\Oh$ of whatever fell in

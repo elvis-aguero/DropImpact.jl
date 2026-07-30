@@ -90,4 +90,27 @@ end
     @test tct !== nothing
     @test tct > 3.4                       # above the entire rigid-wall band
     @test tct ≈ 4.5286 rtol = 0.05        # within 5% of the bath reference
+
+    # AGAINST EXPERIMENT, which is what actually matters. bath_experiment_water.csv holds the
+    # authors' own measured points (Bo = 0.017, Oh = 0.006), nearest here being We = 0.725074,
+    # t_c = 4.6628 +/- 0.1887 over at least 5 trials.
+    #
+    # Two caveats belong in the assertion, not in prose. (i) DEFINITIONS DIFFER: the experiment
+    # times the NORTH POLE across z = 2R because detachment was not optically resolvable, while
+    # threshold_contact_time follows the paper's own model convention, the CENTRE OF MASS across
+    # z = R; the authors quote a typical 5% difference between the two for water. (ii) The paper
+    # states that its own quasi-potential model and DNS "slightly underpredict the dimensionless
+    # contact time at intermediate We", attributing it to neglected nonlinear deformation. So a
+    # residual of order 5-10%, low, is expected here and is NOT evidence of a defect.
+    exp_w = read_csv(joinpath(DATA, "bath_experiment_water.csv"))
+    we, tce, sd = Float64.(exp_w["We"]), Float64.(exp_w["tc_over_tsigma"]), Float64.(exp_w["tc_sd"])
+    i = argmin(abs.(we .- 0.7))
+    @test we[i] ≈ 0.725074 atol = 1e-5
+    @test tce[i] ≈ 4.6628 atol = 1e-3
+    @info "model vs bath experiment" We=0.7 model=tct experiment=tce[i] sd=sd[i] rel=(tct - tce[i]) / tce[i]
+    # Measured: 4.5039 against 4.6628 +/- 0.1887, i.e. -3.4%, or 0.84 sd -- inside one standard
+    # deviation of the measurement, and of the same order as the 5% definition offset alone.
+    @test tct ≈ tce[i] rtol = 0.08
+    @test abs(tct - tce[i]) < 1.5 * sd[i]  # agrees with experiment within its own scatter
+    @test tct < tce[i]                     # and low, the direction the authors report
 end
