@@ -130,6 +130,73 @@ function threshold_contact_time(times::Vector{Float64}, levels::Vector{Level};
 end
 
 """
+    threshold_crossings(times, levels; z_threshold=1.0) -> (t_enter, v_enter, t_exit, v_exit) or nothing
+
+The two instants at which the centre of mass crosses `z_threshold` -- downward, then back upward --
+with the crossing times AND the vertical velocities there, both linearly interpolated. This is the
+single geometric event that AlventosaEtAl2023's §4.2 defines both of its rebound metrics from, so
+both are derived from it here rather than from separate conventions.
+
+Returns `nothing` if the centre of mass never returns above the threshold within the run.
+"""
+function threshold_crossings(times::Vector{Float64}, levels::Vector{Level};
+                             z_threshold::Float64=1.0)
+    length(levels) == length(times) || throw(ArgumentError("times and levels must align"))
+    zs = [l.com.z for l in levels]
+    vs = [l.com.v for l in levels]
+    i_down = findfirst(i -> zs[i] < z_threshold, eachindex(zs))
+    i_down === nothing && return nothing
+    t_enter, v_enter = if i_down == 1
+        times[1], vs[1]                 # started at the threshold, as initial_level does
+    else
+        z0, z1 = zs[i_down-1], zs[i_down]
+        f = (z0 - z_threshold) / (z0 - z1)
+        (times[i_down-1] + f * (times[i_down] - times[i_down-1]),
+         vs[i_down-1] + f * (vs[i_down] - vs[i_down-1]))
+    end
+    i_up = findfirst(i -> zs[i] >= z_threshold, i_down:length(zs))
+    i_up === nothing && return nothing
+    i_up += i_down - 1
+    i_up == 1 && return nothing
+    z0, z1 = zs[i_up-1], zs[i_up]
+    f = (z_threshold - z0) / (z1 - z0)
+    t_exit = times[i_up-1] + f * (times[i_up] - times[i_up-1])
+    v_exit = vs[i_up-1] + f * (vs[i_up] - vs[i_up-1])
+    return (t_enter, v_enter, t_exit, v_exit)
+end
+
+"""
+    threshold_coefficient_of_restitution(times, levels; z_threshold=1.0) -> value or nothing
+
+`alpha = -v_exit / v_enter`, with both velocities taken AT THE TWO INSTANTS THE CENTRE OF MASS
+CROSSES `z_threshold` -- the paper's own definition of alpha, and the partner of
+[`threshold_contact_time`](@ref).
+
+WHY THIS IS NOT [`coefficient_of_restitution`](@ref), and why the distinction matters. That
+function takes the velocities at the first and last `InContact` STEP, which is a different event:
+
+  * AlventosaEtAl2023 §4.2 defines `t_c` as the interval between the two instants the north pole
+    crosses `z=2R`, and alpha as "minus the ratio of the vertical velocities at those times" --
+    i.e. alpha and `t_c` are read off the SAME pair of crossings. For their model and DNS they move
+    both to the centre of mass crossing `z=R`. So the matching alpha here must use the `z_cm=R`
+    crossings, not the contact phases.
+  * The phase-based version is additionally fragile once a run rebounds more than once: it uses
+    `findlast(==(InContact), phases)`, which is the exit of the LAST bounce in the run, not of the
+    impact the experiment measured. With `selector=:crossing` producing genuine multi-bounce
+    trajectories, that is no longer a subtle difference.
+
+Both remain available; this is the one to compare against the published alpha.
+"""
+function threshold_coefficient_of_restitution(times::Vector{Float64}, levels::Vector{Level};
+                                              z_threshold::Float64=1.0)
+    c = threshold_crossings(times, levels; z_threshold=z_threshold)
+    c === nothing && return nothing
+    _, v_enter, _, v_exit = c
+    v_enter == 0 && return nothing
+    return -v_exit / v_enter
+end
+
+"""
     contact_time(times, phases) -> value
 
 Total duration spent with `phase==InContact`, summed over contiguous contact intervals.

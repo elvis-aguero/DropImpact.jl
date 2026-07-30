@@ -1,38 +1,44 @@
-# Compare this model's contact time against the BATH EXPERIMENTS of AlventosaEtAl2023, for either
-# working fluid, at the experiment's own We values.
+# Compare ALL THREE rebound metrics of this model against the BATH EXPERIMENTS of
+# AlventosaEtAl2023, at the experiment's own We values, for either working fluid -- and against the
+# published quasi-potential (1PKM) and DNS curves on the same axes.
 #
-#   julia --project=. scripts/compare_fluid_experiment.jl oil
-#   julia --project=. scripts/compare_fluid_experiment.jl water --M 40 --L 60 --nq 120
+#   julia --project=. -t auto scripts/compare_fluid_experiment.jl oil
+#   julia --project=. -t auto scripts/compare_fluid_experiment.jl water --M 40 --L 60 --nq 120
 #
-# WHAT THIS COMPARES AGAINST. data/experiments/bath_experiment_{water,oil}.csv, read out of the
-# authors' own .fig files by scripts/extract_bath_experiment.m -- measured points with a standard
-# deviation over at least 5 trials each. NOT lowWeberComparison.csv, which is model output with no
-# experiment column, and NOT any of the SOLID_SUBSTRATE_* files, which are a different physical
-# problem entirely (rigid wall, tc = 1.96..3.36, disjoint from the bath's 4.44..8.09).
+# METRICS, all three read off the SAME geometric event, as the paper does (its §4.2 defines t_c as
+# the interval between the two instants the north pole crosses z = 2R and alpha as minus the ratio
+# of the vertical velocities AT THOSE TIMES; for the model and DNS both move to the centre of mass
+# crossing z = R):
 #
-# THE METRIC DIFFERS BETWEEN THE TWO SIDES, and it is not a small effect next to the residuals
-# below. The experiment times the NORTH POLE crossing z = 2R, because the detachment instant was
-# not optically resolvable; threshold_contact_time implements the paper's MODEL convention, the
-# CENTRE OF MASS crossing z = R. The authors quote a typical difference between the conventions of
-# 5% for the water experiments and 2% for the oil. Any residual below that size is not resolved by
-# this comparison.
+#   t_c    threshold_contact_time                  -- CoM below z = R
+#   alpha  threshold_coefficient_of_restitution    -- -v_exit/v_enter at those same two crossings,
+#                                                      NOT the phase-based coefficient_of_restitution,
+#                                                      which uses the first/last InContact step and,
+#                                                      with multi-bounce trajectories, the exit of
+#                                                      the LAST bounce rather than the measured one
+#   delta  max_penetration_depth                   -- -min(z_cm - xi(theta=0)); independent of any
+#                                                      contact-time definition and needs no window,
+#                                                      since each rebound is weaker than the last
 #
-# EACH POINT IS ONE SIMULATION AT PRODUCTION TRUNCATION, roughly 3.5 minutes, so the full 12-point
-# oil set is about 40 minutes. Run it in CI, not on a laptop. --M/--L/--N/--nq are provided for
-# reducing that at a cost in resolution, and the reduction is printed so a cheap run cannot be
-# mistaken for a converged one.
+# THE METRIC OFFSET IS NOT NEGLIGIBLE next to the residuals: experiment times the north pole at
+# z = 2R, this model the CoM at z = R, and the authors quote a typical 5% difference for water and
+# 2% for oil on both t_c and alpha. Residuals below that size are not resolved by this comparison.
+#
+# PROVENANCE OF THE REFERENCE VALUES: see data/experiments/PROVENANCE.md. In particular the .fig
+# files these come from are NOT confirmed to be the published FINAL2 figures.
+#
+# COST: one simulation per point at production truncation -- minutes at low We, up to an hour at
+# We ~ 7. Runs points in parallel across threads; use -t auto. Not a laptop job.
 
 using SpectralKM
 using DelimitedFiles
 using Printf
+using Base.Threads
 
 const HERE = @__DIR__
 const DATA = joinpath(HERE, "..", "data", "experiments")
 const R_EXP = 3.5e-4      # AlventosaEtAl2023 table 1: R = 0.35 mm for both fluids
 
-# `parse(String, s)` does not exist, so a String-valued flag has to be returned verbatim rather
-# than parsed. Getting this wrong made --selector/--viscous throw a MethodError on the first CI
-# dispatch, before a single simulation had run.
 function argval(flag, default)
     i = findfirst(==(flag), ARGS)
     i === nothing && return default
@@ -41,90 +47,126 @@ function argval(flag, default)
     return default isa AbstractString ? v : parse(typeof(default), v)
 end
 
-read_csv(p) = let raw = readdlm(p, ','; header=true)
+read_num(p) = let raw = readdlm(p, ','; header=true)
     d, h = raw[1], vec(raw[2])
     Dict(string(n) => Float64.(d[:, i]) for (i, n) in enumerate(h))
+end
+read_mixed(p) = let raw = readdlm(p, ','; header=true)
+    d, h = raw[1], vec(raw[2])
+    Dict(string(n) => d[:, i] for (i, n) in enumerate(h))
+end
+
+# Curve 2 in the oil figure and curve 6 in the water figure are the blue solid [0 0.45 0.74] lines
+# the captions identify as the quasi-potential model; curve 1 is the black dashed DNS.
+const CURVE_ID = Dict(("oil", "pkm") => 2, ("oil", "dns") => 1,
+                      ("water", "pkm") => 6, ("water", "dns") => 1)
+
+function ref_curve(which, who, metric)
+    path = joinpath(DATA, "bath_model_curves_$(which).csv")
+    isfile(path) || return (Float64[], Float64[])
+    m = read_mixed(path)
+    id = CURVE_ID[(which, who)]
+    sel = findall(i -> m["metric"][i] == metric && round(Int, m["curve"][i]) == id,
+                  eachindex(m["curve"]))
+    xs, ys = Float64.(m["We"][sel]), Float64.(m["value"][sel])
+    o = sortperm(xs)
+    return (xs[o], ys[o])
+end
+
+function interp_at(xs, ys, x)
+    isempty(xs) && return NaN
+    (x < first(xs) || x > last(xs)) && return NaN      # never extrapolate a published curve
+    j = searchsortedfirst(xs, x)
+    j <= 1 && return ys[1]
+    x0, x1 = xs[j-1], xs[j]
+    return x1 == x0 ? ys[j-1] : ys[j-1] + (ys[j] - ys[j-1]) * (x - x0) / (x1 - x0)
 end
 
 function main()
     which = isempty(ARGS) || startswith(ARGS[1], "--") ? "" : ARGS[1]
-    which in ("water", "oil") ||
-        error("name the fluid: `water` or `oil`. Got $(isempty(which) ? "nothing" : which).")
+    which in ("water", "oil") || error("name the fluid: `water` or `oil`")
 
-    csv = joinpath(DATA, "bath_experiment_$(which).csv")
-    isfile(csv) || error("missing $csv -- regenerate with scripts/extract_bath_experiment.m")
-    e = read_csv(csv)
-
-    M  = argval("--M", 60)
-    L  = argval("--L", 120)
-    N  = argval("--N", 3)
-    nq = argval("--nq", 200)
-    b  = argval("--b", 6.0)
-    h0 = argval("--h0", 3.0)
-    tend = argval("--t_end", 14.0)
-    sel = Symbol(argval("--selector", "feasible"))
-    vis = Symbol(argval("--viscous", "reid"))
+    e = read_num(joinpath(DATA, "bath_experiment_$(which).csv"))
+    M, L, N, nq = argval("--M", 60), argval("--L", 120), argval("--N", 3), argval("--nq", 200)
+    b, h0, tend = argval("--b", 6.0), argval("--h0", 3.0), argval("--t_end", 14.0)
+    sel = Symbol(argval("--selector", string(SpectralKM.DEFAULT_SELECTOR)))
+    vis = Symbol(argval("--viscous", string(SpectralKM.DEFAULT_VISCOUS)))
 
     f = which == "water" ? WATER : OIL_5CST
-    # The dimensional route, so the groups are derived once from the fluid properties rather than
-    # retyped per point: We fixes V0, and Bo/Oh follow from (rho, sigma, nu, R) alone.
-    metric_pct = which == "water" ? 5 : 2
-
-    @printf("\n%s, %s (rho = %.0f kg/m^3, sigma = %.4g N/m, nu = %.4g cSt), R = %.3g mm\n",
-            uppercase(which), f.name, f.rho, f.sigma, f.nu * 1e6, R_EXP * 1e3)
+    off = which == "water" ? 5 : 2
     c0 = conditions(drop=f, R=R_EXP, V0=1.0)
-    @printf("Bo = %.6f, Oh = %.6f, t_sigma = %.4f ms   (published: Bo = %.3f, Oh = %.3f)\n",
-            c0.Bo, c0.Oh, t_sigma(f, R_EXP) * 1e3, e["Bo"][1], e["Oh"][1])
-    @printf("truncation M = %d, L = %d, N = %d, nq = %d, b = %g, h0 = %g, selector = %s, viscous = %s\n",
-            M, L, N, nq, b, h0, sel, vis)
+    @printf("\n%s (%s): rho=%.0f, sigma=%.4g N/m, nu=%.3g cSt, R=%.3g mm\n",
+            uppercase(which), f.name, f.rho, f.sigma, f.nu*1e6, R_EXP*1e3)
+    @printf("Bo=%.6f Oh=%.6f t_sigma=%.4f ms   (published Bo=%.3f Oh=%.3f)\n",
+            c0.Bo, c0.Oh, t_sigma(f, R_EXP)*1e3, e["Bo"][1], e["Oh"][1])
+    @printf("M=%d L=%d N=%d nq=%d b=%g h0=%g selector=%s viscous=%s threads=%d\n",
+            M, L, N, nq, b, h0, sel, vis, nthreads())
     (M == 60 && L == 120 && nq == 200) ||
-        @printf("NOTE: reduced from the production truncation (M=60, L=120, nq=200) -- not a converged run.\n")
-    @printf("metric offset: experiment times the north pole at z = 2R, model the CoM at z = R;\n")
-    @printf("               the authors quote ~%d%% between the conventions for %s.\n\n", metric_pct, which)
+        @printf("NOTE: below production truncation (M=60 L=120 nq=200) -- not converged.\n")
+    @printf("metric offset experiment(north pole @2R) vs model(CoM @R): ~%d%% for %s\n\n", off, which)
 
-    @printf("%-4s %-10s %-9s %-9s %-9s %-9s %-8s\n",
-            "#", "We", "tc_model", "tc_exp", "sd_exp", "resid_%", "n_sd")
-    rows = Any[]
-    for (i, We) in enumerate(e["We"])
-        V0 = sqrt(We * f.sigma / (f.rho * R_EXP))       # invert We = rho R V0^2 / sigma
+    n = length(e["We"])
+    tc = fill(NaN, n); cor = fill(NaN, n); dl = fill(NaN, n); wall = fill(NaN, n)
+    @threads for i in 1:n
+        We = e["We"][i]
+        V0 = sqrt(We * f.sigma / (f.rho * R_EXP))     # invert We = rho R V0^2 / sigma
         c = conditions(drop=f, R=R_EXP, V0=V0)
         p = Params(c; b=b, h0=h0, M=M, L=L, N=N, nq=nq, selector=sel, viscous=vis)
+        t0 = time()
         levels, _, _ = run_simulation(p; t_end=tend)
-        tct = threshold_contact_time([l.t for l in levels], levels)
-        tce, sd = e["tc_over_tsigma"][i], e["tc_sd"][i]
-        if tct === nothing
-            @printf("%-4d %-10.4f %-9s %-9.4f %-9.4f %-9s %-8s\n", i, We, "none", tce, sd, "-", "-")
-            push!(rows, (We, NaN, tce, sd, NaN, NaN))
-        else
-            rel = 100 * (tct - tce) / tce
-            nsd = (tct - tce) / sd
-            @printf("%-4d %-10.4f %-9.4f %-9.4f %-9.4f %+-9.2f %+-8.2f\n",
-                    i, We, tct, tce, sd, rel, nsd)
-            push!(rows, (We, tct, tce, sd, rel, nsd))
-        end
-        flush(stdout)
-    end
-
-    ok = [r for r in rows if !isnan(r[2])]
-    if !isempty(ok)
-        rels = [r[5] for r in ok]
-        nsds = [abs(r[6]) for r in ok]
-        @printf("\n%d/%d points completed. residual: mean %+.2f%%, range %+.2f%% .. %+.2f%%\n",
-                length(ok), length(rows), sum(rels) / length(rels), minimum(rels), maximum(rels))
-        @printf("within 1 sd: %d/%d;  within 2 sd: %d/%d;  max |n_sd| = %.2f\n",
-                count(<=(1.0), nsds), length(nsds), count(<=(2.0), nsds), length(nsds),
-                maximum(nsds))
-        @printf("for scale, the metric-definition offset alone is ~%d%% for %s.\n", metric_pct, which)
+        wall[i] = time() - t0
+        ts = [l.t for l in levels]
+        v = threshold_contact_time(ts, levels);                  v !== nothing && (tc[i] = v)
+        v = threshold_coefficient_of_restitution(ts, levels);    v !== nothing && (cor[i] = v)
+        dl[i] = max_penetration_depth(levels, p.L)
+        @printf("  [%2d/%2d] We=%.4f done in %.0f s\n", i, n, We, wall[i]); flush(stdout)
     end
 
     out = joinpath(DATA, "model_vs_experiment_$(which).csv")
     open(out, "w") do io
-        println(io, "We,tc_model,tc_exp,tc_sd,residual_pct,n_sd")
-        for r in rows
-            @printf(io, "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n", r...)
+        println(io, "fluid,We,metric,model,exp,exp_sd,pkm,dns,n_sd,wall_s")
+        for (metric, mine, ex, sd) in (("tc", tc, e["tc_over_tsigma"], e["tc_sd"]),
+                                       ("cor", cor, e["cor"], e["cor_sd"]),
+                                       ("delta", dl, e["delta_over_R"], e["delta_sd"]))
+            xp, yp = ref_curve(which, "pkm", metric)
+            xd, yd = ref_curve(which, "dns", metric)
+            for i in 1:n
+                @printf(io, "%s,%.6f,%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.1f\n",
+                        which, e["We"][i], metric, mine[i], ex[i], sd[i],
+                        interp_at(xp, yp, e["We"][i]), interp_at(xd, yd, e["We"][i]),
+                        (mine[i] - ex[i]) / sd[i], wall[i])
+            end
+        end
+    end
+
+    for (metric, mine, ex, sd, lbl) in (("tc", tc, e["tc_over_tsigma"], e["tc_sd"], "t_c/t_sigma"),
+                                        ("cor", cor, e["cor"], e["cor_sd"], "alpha"),
+                                        ("delta", dl, e["delta_over_R"], e["delta_sd"], "delta/R"))
+        xp, yp = ref_curve(which, "pkm", metric)
+        xd, yd = ref_curve(which, "dns", metric)
+        @printf("\n%s\n%-9s %-9s %-9s %-8s %-9s %-8s %-9s %-8s\n", lbl,
+                "We", "ours", "exp", "sd", "n_sd", "1PKM", "pkm_nsd", "DNS")
+        wins = 0; cmp = 0
+        for i in 1:n
+            q = interp_at(xp, yp, e["We"][i]); d = interp_at(xd, yd, e["We"][i])
+            ns = (mine[i] - ex[i]) / sd[i]; qs = (q - ex[i]) / sd[i]
+            @printf("%-9.4f %-9s %-9.4f %-8.4f %-+9.2f %-8.4f %-+9.2f %-8.4f\n",
+                    e["We"][i], isnan(mine[i]) ? "none" : @sprintf("%.4f", mine[i]),
+                    ex[i], sd[i], ns, q, qs, d)
+            if !isnan(mine[i]) && !isnan(q)
+                cmp += 1; abs(ns) < abs(qs) && (wins += 1)
+            end
+        end
+        ok = [(mine[i]-ex[i])/sd[i] for i in 1:n if !isnan(mine[i])]
+        if !isempty(ok)
+            @printf("  %d/%d points ran; within 1 sd %d, within 2 sd %d; mean n_sd %+.2f\n",
+                    length(ok), n, count(x->abs(x)<=1, ok), count(x->abs(x)<=2, ok),
+                    sum(ok)/length(ok))
+            @printf("  closer to experiment than 1PKM at %d of %d comparable points\n", wins, cmp)
         end
     end
     @printf("\nwrote %s\n", out)
+    @printf("total wall %.0f s over %d threads\n", sum(filter(!isnan, wall)), nthreads())
 end
 
 main()
