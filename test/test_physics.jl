@@ -47,6 +47,14 @@
         bprev = zeros(p.L + 1); bcurr = zeros(p.L + 1)
         dprev = zeros(p.L + 1); dcurr = zeros(p.L + 1)
         bcurr[l+1] = 1e-3
+        # THE TWO-LEVEL HISTORY MUST BE SELF-CONSISTENT. BDF2 reads beta at BOTH t and t-dt, so
+        # the pair (bprev, bcurr) is what sets the initial velocity -- setting dcurr = 0 does not
+        # make the start a rest start. An earlier version left bprev = 0 beside bcurr = 1e-3,
+        # which is a step, i.e. a large implied initial velocity, and the mode then rang at
+        # 1.5*amp0. That was read as spurious amplitude GROWTH in the solver; it was not. For a
+        # release from rest the mode must sit at the same value one step back:
+        #   bdot = (3*b_new - 4*b_curr + b_prev)/(2*dt) = 0  at  b_prev = b_curr = b_new.
+        bprev[l+1] = bcurr[l+1]
         amp0 = abs(bcurr[l+1])
         peak = 0.0
         for _ in 1:20_000                     # ~5 oscillation periods
@@ -59,9 +67,13 @@
             bcurr[l+1], dcurr[l+1] = bn, dn
             peak = max(peak, abs(bn))
         end
-        # BDF2 is dissipative at O(dt^2), so allow a small budget but no more.
-        @test abs(peak - amp0) / amp0 < 0.05
-        @test abs(bcurr[l+1]) < 1.05 * amp0        # and it certainly must not GROW
+        # BDF2 is dissipative at O(dt^2), so allow a small budget but no more. Measured at this
+        # dt over these 5 periods: peak/amp0 = 1 - 8.9e-7, final/amp0 = 1 - 4.4e-5. The bounds
+        # below are therefore loose by more than an order of magnitude and still far tighter
+        # than the 5% they replace -- a 5% budget would not have caught a real drift.
+        @test abs(peak - amp0) / amp0 < 1e-3
+        @test abs(bcurr[l+1]) < 1.001 * amp0       # and it certainly must not GROW
+        @test abs(bcurr[l+1]) > 0.999 * amp0       # nor decay: there is no dissipation at Oh = 0
     end
 
     # =========================================================================================
@@ -194,7 +206,18 @@
                 imp += 0.5 * (fs[i] + fs[i-1]) * (ts[i] - ts[i-1])
             end
             grav = -p.Bo * (levels[i1].t - levels[i0].t)
-            @test isapprox(dv, grav - imp; rtol=0.15, atol=0.05)
+            # THE IDENTITY IS FIXED BY eq:com OF THE PAPER, NOT GUESSED:
+            #     zdot_cm = v,   vdot = (3/2) f - Bo,   f = 2*int_0^{r_c} p r dr,
+            # so dv = (3/2)*Impulse + grav. An earlier version asserted `dv = grav - imp`,
+            # dropping BOTH the 3/2 prefactor and the sign of f. com_force_closed documents
+            # f > 0 as the DECELERATING sense (w > 0 over the patch), and the drop enters with
+            # v < 0, so the contact impulse must RAISE v: the sign was backwards, which is why
+            # this read as +1.36 against -1.03 and looked like a conservation violation.
+            # Measured with the identity written correctly: dv = 1.360515, 1.5*imp + grav =
+            # 1.362265, a relative residual of -1.3e-3 -- set by the trapezoid rule over the
+            # per-step force, not by any physics. The old rtol = 0.15 was loose enough to hide
+            # a 15% momentum leak; 1% is the honest tolerance for this discretisation.
+            @test isapprox(dv, 1.5 * imp + grav; rtol=0.01, atol=0.005)
             @test imp > 0                    # the force decelerates: positive upward impulse
         end
     end
