@@ -2,20 +2,84 @@
 """
 Convert the published rebound datasets into tidy CSVs under data/experiments/.
 
-TWO SOURCES, and the distinction matters because only one carries the target variable.
+  ##########################################################################################
+  #  WRONG-PROBLEM WARNING.  Source A is the DROPLET-ONTO-SOLID-SUBSTRATE problem, NOT the  #
+  #  droplet-onto-bath problem this repository models.  An earlier version of this header   #
+  #  asserted it was "published figure data for Alventosa et al. 2023" (the bath paper).    #
+  #  That attribution was WRONG and produced a spurious factor-of-two contact-time          #
+  #  discrepancy.  Its outputs are prefixed SOLID_SUBSTRATE_ and must NEVER be used to      #
+  #  validate this model.  Evidence, in the order that settles it:                          #
+  #                                                                                         #
+  #    * the file is named after github.com/.../LowWeberDropRebound, whose README opens      #
+  #      "MATLAB scripts for simulating the dynamics of liquid droplets impacting SOLID      #
+  #      SUBSTRATES";                                                                        #
+  #    * that repo's sweeper_experiments.m hardcodes `Bo = 0.0189` -- exactly the single      #
+  #      fixed Bo of this file's dns and km_model blocks;                                    #
+  #    * its solver contains ZERO occurrences of besselj, tanh or "bath": there are no bath   #
+  #      surface degrees of freedom at all, only the drop's Legendre amplitudes;              #
+  #    * the bath paper's Figure 5 is water at Bo = 0.017, Oh = 0.006 with quasi-potential   #
+  #      and DNS curves only -- it has NO "KM model" curve, while this file has one;          #
+  #    * the bath paper has exactly TWO experimental (Bo, Oh) points (water, oil); this      #
+  #      file's experiment block is a continuum, Oh = 0.0139..0.7865, Bo = 0.0037..0.4197;   #
+  #    * this file's km_model block includes Bo = 0 and Oh = 0 rows, i.e. an inviscid        #
+  #      zero-gravity parametric sweep, not a two-fluid experiment;                          #
+  #    * physics: on a rigid wall the low-We contact time is set by the drop's own l = 2     #
+  #      free oscillation, full period 2*pi/sqrt(8) = 2.2214 t_sigma, and the classical      #
+  #      superhydrophobic-rebound result is ~2.6 t_sigma (Richard, Clanet & Quere 2002).     #
+  #      This file: km_model 2.41 at We = 1, dns 1.96..3.36.  A BATH deforms and absorbs     #
+  #      energy in interfacial waves, so its contact time is LONGER -- source C below gives  #
+  #      4.44..8.09, and this model gives 4.44 at the water point.  Different problems.      #
+  ##########################################################################################
 
-  A. "LowWeberDropRebound - Data.xlsx" -- published figure data for Alventosa et al. 2023
-     (references/BouncingDroplets.tex). Each sheet holds side-by-side blocks for
-     Experiment / DNS / KM model, and the EXPERIMENT blocks carry UNCERTAINTIES.
-       Figure 5(b) -> CONTACT TIME tc/t_sigma vs We          <-- the target variable
+THREE SOURCES.  Only C is the right problem.
+
+  A. "LowWeberDropRebound - Data.xlsx" -- DROP ONTO A SOLID SUBSTRATE (see the box above).
+     Each sheet holds side-by-side blocks for Experiment / DNS / KM model, and the EXPERIMENT
+     blocks carry UNCERTAINTIES.  The "KM model" column is the full kinematic-match model of
+     Galeano-Rios et al. applied to a RIGID WALL -- it is not the 1PKM bath model.
+       Figure 5(b) -> contact time tc/t_sigma vs We
        Figure 5(a) -> coefficient of restitution vs We
        Figure 6(b) -> contact radius rc/R as a time series
-     This is the file to compare against.
+     Kept only so the mistake stays visible and so the solid-substrate limit is available
+     for contrast.  NOT a validation target for this repository.
 
   B. "DataForReboundsOnly.xlsx" (km-dropplet-onto-bath/matlab/1_code/Figures/) -- 627 raw
-     rebound measurements, single fluid. Much larger, but it has NO CONTACT TIME: its columns
-     are sigma, mu, rho, Dn, class, R, Vi, Vo, ho, eps, We, Bo, Oh. Retained as a broad
-     secondary CoR dataset only.
+     rebound measurements, single fluid, from the BATH repository. Much larger, but it has NO
+     CONTACT TIME: its columns are sigma, mu, rho, Dn, class, R, Vi, Vo, ho, eps, We, Bo, Oh.
+     Retained as a broad secondary CoR dataset only.
+
+  C. "lowWeberComparison.csv" (km-dropplet-onto-bath/matlab/1_code/Figures/) -- a BATH dataset,
+     but MODEL OUTPUT ONLY, not experiment: 153 model runs at N = 60 carrying Westar, Bo,
+     Oh, max_deflection, CONTACT TIME and coefficient of restitution, with contact time in
+     4.4408..8.0946.  It includes the water point Bo = 0.016644, Oh = 0.006165 exactly, where
+     it gives 4.5286 -- against 4.5297 from running the reference MATLAB directly and 4.4432
+     from this model.  Copied through verbatim as bath_km_contact_time.csv; the metric is the
+     trajectory threshold (centre of mass below R), i.e. threshold_contact_time, NOT the
+     in-contact duration.  Being model output, it supports a CODE-TO-CODE cross-check and
+     nothing stronger -- it is not validation.  For that, see D.
+
+  D. THE ACTUAL BATH EXPERIMENTS, and the only genuine validation target here:
+     data/experiments/bath_experiment_{water,oil}.csv, produced by
+     scripts/extract_bath_experiment.m (MATLAB, reads the authors' source .fig files in
+     km-dropplet-onto-bath/matlab/1_code/Figures/).  17 measured points with standard
+     deviations over at least 5 trials each -- 5 for water at Bo = 0.017, Oh = 0.006 and 12 for
+     5 cSt oil at Bo = 0.056, Oh = 0.058 -- carrying contact time, coefficient of restitution
+     and maximum penetration depth.
+
+     These were NOT in the digitised CSV export that already existed in that repository: the
+     experimental points are stored as `errorbar` objects, one per point, and an export that
+     walks only `line` children drops every one of them.  That export contains the eight model
+     curves of the figure and none of the five water experimental points, which is why the
+     experiments appeared to be missing entirely.
+
+     METRIC MISMATCH, stated by the authors (paper sec. 4.2) and NOT to be papered over: the
+     EXPERIMENT times the north pole across z = 2R, because detachment was not optically
+     resolvable; the MODEL and DNS use the centre of mass across z = R.  The authors quote a
+     typical difference of 5% for water and 2% for oil.  threshold_contact_time implements the
+     model convention, so a residual of that order against these columns comes from the
+     definition alone.  The paper further states its own model and DNS "slightly underpredict
+     the dimensionless contact time at intermediate We".  Measured here at We = 0.7:
+     this model 4.5039 against experiment 4.6628 +/- 0.1887, i.e. -3.4%, or 0.84 sd.
 
 NOT INTERPRETED, deliberately, because guessing would give a plausible-looking wrong
 comparison:
@@ -37,12 +101,14 @@ OUTDIR = ROOT / "data" / "experiments"
 FIGDATA = Path.home() / "Downloads" / "LowWeberDropRebound - Data.xlsx"
 REBOUNDS = (Path.home() /
             "Documents/Github/km-dropplet-onto-bath/matlab/1_code/Figures/DataForReboundsOnly.xlsx")
+BATHMODEL = (Path.home() /
+             "Documents/Github/km-dropplet-onto-bath/matlab/1_code/Figures/lowWeberComparison.csv")
 
 # (sheet, output name, value column, {source: (first_col, has_uncertainty)})
 FIG_SPECS = [
-    ("Figure 5(b)", "contact_time_vs_we.csv", "tc_over_tsigma",
+    ("Figure 5(b)", "SOLID_SUBSTRATE_contact_time_vs_we.csv", "tc_over_tsigma",
      {"experiment": (1, True), "dns": (8, False), "km_model": (13, False)}),
-    ("Figure 5(a)", "cor_vs_we.csv", "cor",
+    ("Figure 5(a)", "SOLID_SUBSTRATE_cor_vs_we.csv", "cor",
      {"experiment": (1, True), "dns": (8, False), "km_model": (13, False)}),
 ]
 
@@ -91,8 +157,8 @@ def convert_contact_radius():
         blk["series"] = series
         frames.append(blk[["source", "series", "t_over_tsigma", "rc_over_R", "We", "Oh", "Bo"]])
     out = pd.concat(frames, ignore_index=True)
-    out.to_csv(OUTDIR / "contact_radius_timeseries.csv", index=False)
-    print(f"  {'contact_radius_timeseries.csv':30s} {len(out):5d} rows  "
+    out.to_csv(OUTDIR / "SOLID_SUBSTRATE_contact_radius_timeseries.csv", index=False)
+    print(f"  {'SOLID_SUBSTRATE_contact_radius_timeseries.csv':30s} {len(out):5d} rows  "
           f"{out.series.value_counts().to_dict()}")
 
 
@@ -117,17 +183,33 @@ def convert_rebounds():
           f"   (NO contact time in this file)")
 
 
+def convert_bath_model():
+    """Source C: the BATH contact-time dataset -- the only correct validation target here."""
+    d = pd.read_csv(BATHMODEL)
+    need = {"Westar", "Bo", "Oh", "max_deflection", "contact_time", "coef_restitution", "N"}
+    if not need.issubset(d.columns):
+        sys.exit(f"bath model csv missing columns: {sorted(need - set(d.columns))}")
+    d.to_csv(OUTDIR / "bath_km_contact_time.csv", index=False)
+    print(f"  {'bath_km_contact_time.csv':30s} {len(d):5d} rows  "
+          f"We* {d.Westar.min():.4g}..{d.Westar.max():.4g}, "
+          f"Oh {d.Oh.min():.4g}..{d.Oh.max():.4g}, "
+          f"tc {d.contact_time.min():.4f}..{d.contact_time.max():.4f}"
+          f"   (threshold metric: z_cm < R)")
+
+
 def main():
     OUTDIR.mkdir(parents=True, exist_ok=True)
-    missing = [p for p in (FIGDATA, REBOUNDS) if not p.exists()]
+    missing = [p for p in (FIGDATA, REBOUNDS, BATHMODEL) if not p.exists()]
     if missing:
         sys.exit("missing source(s):\n  " + "\n  ".join(str(m) for m in missing))
-    print("A. published figure data (Alventosa et al. 2023) -- carries the TARGET variable:")
+    print("A. SOLID SUBSTRATE figure data -- WRONG PROBLEM, kept for contrast only:")
     for spec in FIG_SPECS:
         convert_figure(*spec)
     convert_contact_radius()
-    print("\nB. raw rebound measurements -- broad CoR only:")
+    print("\nB. raw rebound measurements (bath repo) -- broad CoR only, no contact time:")
     convert_rebounds()
+    print("\nC. BATH model contact time -- the validation target:")
+    convert_bath_model()
 
 
 if __name__ == "__main__":

@@ -220,6 +220,82 @@ function onset_theta_c(hist::SimHistory, dt::Float64, p::Params; nsample::Int=40
 end
 
 """
+    crossing_theta_c(am, beta, zcm, p; nsample=400) -> Union{Nothing,Float64}
+
+The LARGEST `theta` at which the droplet and bath surfaces cross, i.e. the largest root of
+`C(theta) = 0`. This is the contact-edge rule of AlventosaEtAl2023, read from their reference
+implementation (harrislab-brown/BouncingDroplets, `bounce_alventosa_bessel_implicit.m:245`):
+
+    xx = intersections(drop_curve, bath_curve, 0);
+    if ~isempty(xx);  ra = xx(end);      % LARGEST crossing
+    else              ra = rc(nn-1);     % otherwise HOLD the previous value
+    end
+
+Note `C(theta) = eta(r(theta)) - z_cm + z_d(theta)` is exactly the vertical gap between the two
+surfaces at radius `r(theta)`, so a root of `C` IS an intersection of their curves -- the two
+formulations agree, ours parameterised by `theta` and theirs by `r`.
+
+WHY THIS REPLACES `select_theta_c`. That routine used
+`theta_c = inf{theta : non-intersection and monotone-r hold}`, which is degenerate: near the edge
+`C ~ a*(theta - theta_c)`, non-overlap is the inequality `a <= 0`, and once `a < 0` for every
+`theta_c > 0` the infimum is 0 *regardless of the magnitude of a*. Measured, the patch collapsed
+200x in a single 1e-3 step and never recovered, `f` then decayed to 1e-8 from above without ever
+reversing, and contact dragged on for 63% of its duration after the drop had begun rising --
+giving a contact time ~2x too long and nearly flat in `We`. Derived in
+`derivations/tangency-selector.tex`, verified in `derivations/cas_tangency_residual.py`.
+
+Taking the LARGEST crossing and HOLDING the previous value when there is none is what keeps the
+patch wide enough for `f` to eventually go negative, which is how contact actually ends.
+
+Returns `nothing` when the surfaces do not cross at all, leaving the caller to hold its previous
+value (or, at onset, to conclude there is no contact yet).
+"""
+function crossing_theta_c(am::AbstractVector, beta::AbstractVector, zcm,
+                          p::Params; nsample::Int=400)
+    thetas = range(1e-4, π / 2; length=nsample)
+    Cprev = C_at_theta(am, beta, zcm, first(thetas), p)
+    last_cross = nothing
+    for theta in Iterators.drop(thetas, 1)
+        Cnow = C_at_theta(am, beta, zcm, theta, p)
+        if (Cprev > 0) != (Cnow > 0)
+            # linear interpolation of the crossing, then keep going: we want the LAST one
+            last_cross = theta - (theta - (theta - step(thetas))) * Cnow / (Cnow - Cprev)
+            last_cross = theta - step(thetas) * Cnow / (Cnow - Cprev)
+        end
+        Cprev = Cnow
+    end
+    return last_cross
+end
+
+# Clamps matching the reference implementation: saturate just below the equator (they use
+# 0.9998R, "avoid R exactly because of projection issues") and floor at ~0.01R.
+const THETA_C_SAT = asin(0.9998)
+const THETA_C_FLOOR_R = 0.01
+
+"""
+    select_theta_c_crossing(hist, dt, theta_c_prev, chat_guess, p) -> payload | nothing
+
+Contact-edge selection by the reference rule: advance the state, take the largest surface
+crossing, hold `theta_c_prev` if there is none, clamp, then solve once at that angle. No
+feasibility predicates are consulted -- the crossing determines the edge outright.
+"""
+function select_theta_c_crossing(hist::SimHistory, dt::Float64, theta_c_prev::Float64,
+                                 chat_guess::Vector{Float64}, p::Params)
+    # advance with zero pressure to get the trial surfaces, as onset_theta_c does
+    trial = free_flight_step(hist, dt, p)
+    th = crossing_theta_c(trial.bath.a, trial.drop.beta, trial.com.z, p)
+    if th === nothing
+        theta_c_prev <= 0 && return nothing        # nothing to hold: not in contact
+        th = theta_c_prev                          # HOLD, do not collapse
+    end
+    th = clamp(th, asin(THETA_C_FLOOR_R), THETA_C_SAT)
+    chat, result, am, beta, zcm, f, cm, bl = inner_solve(hist, dt, th, chat_guess, p)
+    usable = result.status == Converged || result.resid_norm_hist[end] < 1e-4
+    usable || return nothing
+    return (; chat, result, am, beta, zcm, f, cm, bl, theta_c=th)
+end
+
+"""
     contact_step(hist, dt, theta_c_prev, chat_guess, p) -> (level, info) | (nothing, info)
 
 One full contact step: the outer selection of `theta_c` (design doc eq:theta-c-argmin and
@@ -230,7 +306,11 @@ a signal to reduce `dt` and retry.
 """
 function contact_step(hist::SimHistory, dt::Float64, theta_c_prev::Float64,
     chat_guess::Vector{Float64}, p::Params; dt_ref::Float64=1e-3)
-    best = select_theta_c(hist, dt, theta_c_prev, chat_guess, p; dt_ref=dt_ref)
+    best = if p.selector === :crossing
+        select_theta_c_crossing(hist, dt, theta_c_prev, chat_guess, p)
+    else
+        select_theta_c(hist, dt, theta_c_prev, chat_guess, p; dt_ref=dt_ref)
+    end
     best === nothing && return nothing, (; nadmissible=0)
 
     dtprev = hist.curr.dt

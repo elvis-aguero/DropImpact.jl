@@ -39,6 +39,7 @@ struct Params
     b::Float64
     h0::Float64
     nq::Int
+    selector::Symbol
     viscous::Symbol
     drop_lambda::Vector{Float64}
     drop_omega2::Vector{Float64}
@@ -114,6 +115,34 @@ const DEFAULT_L = 120
 const DEFAULT_N = 3
 const DEFAULT_NQ = 200
 
+# Contact-edge selection rule.
+#
+#   :crossing -- theta_c is the LARGEST crossing of the droplet and bath surfaces, HOLDING the
+#                previous value when they do not cross, clamped to [asin(0.01), asin(0.9998)].
+#                This is AlventosaEtAl2023's rule, read from their reference implementation
+#                (harrislab-brown/BouncingDroplets, bounce_alventosa_bessel_implicit.m:245).
+#                Their defaults: b = 25R, 151 bath modes, 55 drop modes, and bath eigenvalues
+#                k = besselzero(-1,...)/b. Since J_{-1} = -J_1 those are the J_1 zeros, i.e. a
+#                NO-FLUX wall -- the same condition we use. (An earlier note here claimed they
+#                use a Dirichlet/pinned wall, from misreading the separate u = besselzero(0,...)
+#                array, which is used for the pressure-projection interpolation and not for the
+#                bath basis. Corrected.)
+#                No feasibility predicates are consulted.
+# DEFAULT IS :feasible -- DELIBERATELY UNCHANGED. :crossing matches the reference implementation
+# and does fix the low-We patch collapse, but it does NOT fix the contact-time overprediction
+# (measured 6.3312 vs 6.3218 at We=0.0231, and 4.9553 vs 4.9531 at We=0.9985 -- unchanged to
+# three digits). Defaulting to it would alter every result while resolving nothing that is
+# currently under investigation, and would confound the next measurement. Opt in explicitly.
+#
+#   :feasible -- the current rule, theta_c = inf{theta : non-intersection and monotone-r}.
+#                DEGENERATE: once non-intersection stops binding, the infimum is 0 regardless of
+#                the gap's magnitude, so the patch collapsed 200x in a single 1e-3 step and never
+#                recovered; f then decayed to 1e-8 from above without reversing and contact
+#                dragged on for 63% of its duration after the drop began rising, giving a contact
+#                time ~2x too long and nearly flat in We. Retained only to reproduce the old
+#                behaviour. Derived in derivations/tangency-selector.tex.
+const DEFAULT_SELECTOR = :feasible
+
 # Viscous model for the DROP modes.
 #
 #   :lamb -- lambda_l = Oh(l-1)(2l+1), omega_l^2 = l(l-1)(l+2). Lamb's (1881) small-viscosity
@@ -163,7 +192,8 @@ const DEFAULT_NQ = 200
 const DEFAULT_VISCOUS = :reid
 
 """
-    Params(; We, Bo, Oh, b, h0, wall=:free, M, L, N, nq, check_budget=true)
+    Params(; We, Bo, Oh, b, h0, wall=:free, M, L, N, nq,
+             selector=DEFAULT_SELECTOR, viscous=DEFAULT_VISCOUS, check_budget=true)
 
 Only the PHYSICAL inputs are required: the Weber, Bond and Ohnesorge numbers and the bath
 geometry `b, h0`. The numerical truncations `M, L, N, nq` default to
@@ -238,8 +268,10 @@ the bath eigenvalues and the Fourier-Bessel weight (design doc eq:bessel-norm):
 """
 function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
                 M::Integer=DEFAULT_M, L::Integer=DEFAULT_L, N::Integer=DEFAULT_N,
-                nq::Integer=DEFAULT_NQ, viscous::Symbol=DEFAULT_VISCOUS,
-                check_budget::Bool=true)
+                nq::Integer=DEFAULT_NQ, selector::Symbol=DEFAULT_SELECTOR,
+                viscous::Symbol=DEFAULT_VISCOUS, check_budget::Bool=true)
+    selector in (:crossing, :feasible) ||
+        throw(ArgumentError("selector must be :crossing or :feasible, got $selector"))
     wall in (:free, :pinned, :clamped) ||
         throw(ArgumentError("wall must be :free, :pinned or :clamped, got $wall"))
     viscous in (:lamb, :reid) ||
@@ -276,7 +308,7 @@ function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
     com_nq = min_nq_for_exact_com(N, L)
     com_nodes, com_weights = gauss_legendre_nodes(com_nq)
     drop_lambda, drop_omega2 = drop_viscous_coeffs(L, Oh, viscous)
-    return Params(We, Bo, Oh, M, L, N, b, h0, nq, viscous, drop_lambda, drop_omega2,
+    return Params(We, Bo, Oh, M, L, N, b, h0, nq, selector, viscous, drop_lambda, drop_omega2,
                   wall, kvals, bath_norm, j0kb,
                   nodes, weights, com_nodes, com_weights)
 end

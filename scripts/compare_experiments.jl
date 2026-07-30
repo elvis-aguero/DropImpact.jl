@@ -54,8 +54,26 @@ using Printf
 using Statistics
 
 const ROOT = dirname(@__DIR__)
-const TC_CSV = joinpath(ROOT, "data", "experiments", "contact_time_vs_we.csv")
-const COR_CSV = joinpath(ROOT, "data", "experiments", "cor_vs_we.csv")
+
+# ############################################################################################
+# WRONG-PROBLEM GUARD. The dataset this script was originally built around is the DROPLET-ONTO-
+# SOLID-SUBSTRATE problem, not the bath problem this repository models -- see the evidence box
+# in scripts/convert_experiments.py. Comparing against it produced a spurious factor-of-two
+# contact-time discrepancy that was investigated as a model defect for several rounds.
+#
+# On a rigid wall the low-We contact time is set by the drop's own l = 2 free oscillation
+# (2*pi/sqrt(8) = 2.2214 t_sigma; ~2.6 classically) and those data sit at 1.9..3.4. A bath
+# deforms and carries energy away in interfacial waves, so contact lasts LONGER: the bath
+# dataset spans 4.44..8.09 and this model gives 4.44 at the water point. The two problems have
+# genuinely different answers, so no amount of parameter matching reconciles them.
+#
+# Overlaying against the solid-substrate data is therefore opt-in and labelled, and the bath
+# reference below is what a claim about this model must be made against.
+# ############################################################################################
+const TC_CSV = joinpath(ROOT, "data", "experiments", "SOLID_SUBSTRATE_contact_time_vs_we.csv")
+const COR_CSV = joinpath(ROOT, "data", "experiments", "SOLID_SUBSTRATE_cor_vs_we.csv")
+const BATH_CSV = joinpath(ROOT, "data", "experiments", "bath_km_contact_time.csv")
+const ALLOW_SOLID = "--allow-solid-substrate" in ARGS
 # v2: `tc` now means threshold_contact_time (AlventosaEtAl2023's definition), NOT the
 # InContact duration stored by v1. v1 entries are unusable, hence the new filename rather
 # than silently mixing metrics.
@@ -191,19 +209,48 @@ end
 
 # ---------------------------------------------------------------- pick the sweep
 """
-Choose `n` points spanning We logarithmically over the EXPERIMENTAL range, taking the median
-Bo/Oh among nearby experimental points so each simulated case is representative of the data it
-will be compared against rather than an outlier.
+Choose `n` comparison points by clustering on (We, Bo, Oh) TOGETHER, not by binning on We alone.
+
+WHY THIS IS NOT A DETAIL. The earlier version split log10(We) into equal intervals and took the
+median We, Bo and Oh of whatever experimental points fell in each. The dataset spans
+Oh = 0.0139..0.7865 and Bo = 0.0037..0.4197, so one We window mixes fluids differing by 33-54x in
+Oh, and the experimental tc values WITHIN a window already differ by 1.35-1.48x. Comparing a
+simulation at the window's median Bo/Oh against the window's median tc then manufactured a
+"2x contact-time overprediction" that does not exist: run at matched parameters this model agrees
+with the reference implementation to 0.65% on contact duration.
+
+So: first restrict to a single fluid cluster in (Bo, Oh) -- `bo_tol`/`oh_tol` are RELATIVE
+half-widths about the requested centre -- and only then spread points over We within it. Points
+are reported with the actual Bo/Oh spread of their neighbourhood so a residual can never again be
+quoted without it.
 """
-function choose_points(exp, n)
-    lo, hi = log10(minimum(exp.We)), log10(maximum(exp.We))
+function choose_points(exp, n; bo_centre=nothing, oh_centre=nothing,
+                       bo_tol=0.25, oh_tol=0.25)
+    # default cluster centre: the modal fluid, taken as the median of the densest Oh decade
+    ohc = oh_centre === nothing ? median(exp.Oh) : oh_centre
+    boc = bo_centre === nothing ? median(exp.Bo) : bo_centre
+    keep = findall(i -> abs(exp.Oh[i] - ohc) <= oh_tol * ohc &&
+                        abs(exp.Bo[i] - boc) <= bo_tol * boc, eachindex(exp.We))
+    if length(keep) < 2 * n
+        @warn """
+            Only $(length(keep)) experimental points lie within the requested (Bo, Oh) cluster, so
+            the comparison would be thin. Widen bo_tol/oh_tol, or pick a centre where the data
+            actually lives -- but do NOT fall back to binning on We alone, which is what produced
+            a spurious 2x discrepancy.
+            """ ohc boc n_kept=length(keep)
+    end
+    isempty(keep) && return NamedTuple[]
+    We_k, Bo_k, Oh_k = exp.We[keep], exp.Bo[keep], exp.Oh[keep]
+    lo, hi = log10(minimum(We_k)), log10(maximum(We_k))
     edges = range(lo, hi; length=n + 1)
     pts = NamedTuple[]
     for i in 1:n
-        sel = findall(j -> edges[i] <= log10(exp.We[j]) <= edges[i+1], eachindex(exp.We))
+        sel = findall(j -> edges[i] <= log10(We_k[j]) <= edges[i+1], eachindex(We_k))
         isempty(sel) && continue
-        push!(pts, (We=median(exp.We[sel]), Bo=median(exp.Bo[sel]), Oh=median(exp.Oh[sel]),
-                    nexp=length(sel)))
+        push!(pts, (We=median(We_k[sel]), Bo=median(Bo_k[sel]), Oh=median(Oh_k[sel]),
+                    nexp=length(sel),
+                    oh_spread=maximum(Oh_k[sel]) / minimum(Oh_k[sel]),
+                    bo_spread=maximum(Bo_k[sel]) / minimum(Bo_k[sel])))
     end
     return pts
 end
@@ -288,6 +335,39 @@ function write_svg(path, panels, sims)
 end
 
 # ---------------------------------------------------------------- main
+
+# Bath reference, always reported: this is the only correct validation target (source C).
+if isfile(BATH_CSV)
+    braw = readdlm(BATH_CSV, ','; header=true)
+    bd, bh = braw[1], vec(braw[2])
+    bc(n) = findfirst(==(n), bh)
+    btc = Float64.(bd[:, bc("contact_time")])
+    @printf("BATH reference (bath_km_contact_time.csv, threshold metric z_cm<R): %d runs, tc %.4f..%.4f\n",
+            length(btc), minimum(btc), maximum(btc))
+    bo, oh = Float64.(bd[:, bc("Bo")]), Float64.(bd[:, bc("Oh")])
+    k = findfirst(i -> abs(oh[i] - 0.006165) < 1e-5 && abs(bo[i] - 0.016644) < 1e-5, eachindex(oh))
+    k === nothing || @printf("  water point Bo=%.6f Oh=%.6f: reference tc = %.4f  (this model: 4.4432)\n",
+                             bo[k], oh[k], btc[k])
+end
+
+if !ALLOW_SOLID
+    error("""
+
+    REFUSING TO RUN. The overlay below compares against SOLID-SUBSTRATE data
+    (SOLID_SUBSTRATE_contact_time_vs_we.csv), which is the WRONG PHYSICAL PROBLEM for this
+    bath model -- see the guard comment at the top of this file and the evidence box in
+    scripts/convert_experiments.py. It previously produced a spurious 2x contact-time
+    discrepancy that was chased as a model defect.
+
+    Rigid wall: tc set by the drop's l=2 free oscillation, 1.9..3.4 in those data.
+    Bath:       tc = 4.44..8.09 (bath_km_contact_time.csv). Different problems, different answers.
+
+    To validate this model, compare against bath_km_contact_time.csv (reported above).
+    To produce the solid-substrate overlay anyway, for contrast and clearly labelled as such,
+    pass --allow-solid-substrate.
+    """)
+end
+
 tc_exp = load_figure(TC_CSV, "tc_over_tsigma", "experiment")
 tc_dns = load_figure(TC_CSV, "tc_over_tsigma", "dns")
 tc_km  = load_figure(TC_CSV, "tc_over_tsigma", "km_model")
@@ -356,8 +436,8 @@ if nnew > 0 && !("--yes" in ARGS)
     exit(0)
 end
 
-@printf("\n%-4s %-10s %-10s %-10s %-6s %-13s %-13s %-9s %-9s %-s\n",
-        "#", "We", "Bo", "Oh", "n_exp", "tc(threshold)", "tc(InContact)", "cor", "pen", "source")
+@printf("\n%-4s %-9s %-9s %-9s %-6s %-8s %-8s %-12s %-12s %-8s %-s\n",
+        "#", "We", "Bo", "Oh", "n_exp", "Oh sprd", "Bo sprd", "tc(thresh)", "tc(InCont)", "cor", "source")
 flush(stdout)
 sims = NamedTuple[]
 for (i, pt) in enumerate(pts)
@@ -374,8 +454,8 @@ for (i, pt) in enumerate(pts)
         append_cache(pt.We, pt.Bo, pt.Oh, VISCOUS, cor, tc, tci, pen); src = "ran"
     end
     push!(sims, (We=pt.We, Bo=pt.Bo, Oh=pt.Oh, cor=cor, tc=tc, tc_incontact=tci, pen=pen))
-    @printf("%-4d %-10.4g %-10.4g %-10.4g %-6d %-13.4f %-13.4f %-9.4f %-9.4f %-s\n",
-            i, pt.We, pt.Bo, pt.Oh, pt.nexp, tc, tci, cor, pen, src)
+    @printf("%-4d %-9.4g %-9.4g %-9.4g %-6d %-8.2f %-8.2f %-12.4f %-12.4f %-8.4f %-s\n",
+            i, pt.We, pt.Bo, pt.Oh, pt.nexp, pt.oh_spread, pt.bo_spread, tc, tci, cor, src)
     flush(stdout)
 end
 isempty(sims) && (println("\nnothing simulated; no overlay written."); exit(0))
