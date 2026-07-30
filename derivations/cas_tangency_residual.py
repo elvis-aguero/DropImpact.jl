@@ -4,7 +4,12 @@ CAS for the tangency-based contact-edge selector.
 
 TWO THINGS TO ESTABLISH, in the order they matter:
 
-  (A) WHY THE CURRENT RULE FAILS.  src/timestepper.jl selects
+  (A) WHY THE CURRENT RULE IS DEGENERATE.  (NOTE: this was originally investigated as the cause of
+      a ~2x contact-time overprediction. That symptom is RETRACTED -- it was an artefact of
+      comparing against experimental data binned on We alone, mixing fluids differing 33-54x in Oh.
+      Run at matched parameters this model agrees with the reference implementation to 0.65% on
+      contact duration. The degeneracy below is nonetheless real and worth fixing on its own
+      terms.)  src/timestepper.jl selects
           theta_c = inf{ theta : non-intersection and monotone-r hold }.
       Measured behaviour (derivations/debug_feasibility_collapse.jl): at t = 0.009 the
       non-intersection predicate is FALSE for all theta < 0.0492 and the infimum is a sensible

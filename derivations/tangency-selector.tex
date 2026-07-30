@@ -4,6 +4,7 @@
 \usepackage[T1]{fontenc}
 \newcommand{\Oh}{\mathrm{Oh}}
 \newcommand{\We}{\mathrm{We}}
+\newcommand{\Bo}{\mathrm{Bo}}
 \title{The contact-edge selector: why $\theta_c=\inf\mathcal F$ fails,\\
 {\large and the closed-form tangency residual that replaces it}}
 \author{SpectralKM derivations}
@@ -12,30 +13,66 @@
 \begin{document}
 \maketitle
 
-\section{The symptom}
+\section{The symptom --- retracted}
 
-Measured against the published data of \cite{AlventosaEtAl2023}, this model overpredicts the
-contact time by roughly a factor of two: $t_c/t_\sigma$ of $4.9$--$6.1$ against an experimental
-$2.4$--$4.0$, and nearly \emph{flat} in $\We$ where the experiment decreases. Three candidate
-causes were tested and eliminated:
+\begin{quote}
+\textbf{An earlier version of this note opened by asserting that the model overpredicts the
+contact time by roughly a factor of two. That is retracted: it was an artefact of the comparison,
+not a property of the model.}
+\end{quote}
+
+Run at \emph{identical} dimensionless parameters, this model and the reference implementation
+(harrislab-brown/BouncingDroplets, executed directly in \textsc{Matlab}) agree:
+
+\begin{center}
+\begin{tabular}{lccl}
+\toprule
+metric & ours & reference & difference \\
+\midrule
+contact duration (\path{primary_contact_time} / their $f>0$) & $3.6293$ & $3.6530$ & $0.65\%$ \\
+threshold, centre of mass below $R$ & $4.4432$ & $4.5297$ & $1.9\%$ \\
+$\min z_{cm}/R$ & $0.1670$ & $0.1110$ & we penetrate less \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+at $\We=1.0959$, $\Bo=0.01661$, $\Oh=0.00617$ ($R=0.35$\,mm water, $U=0.4759$\,m/s).
+
+\paragraph{Where the false symptom came from.} The comparison script selected simulation
+parameters by \emph{binning on $\We$ alone}: it split $\log_{10}\We$ into equal intervals over the
+931 experimental points and took the median $\We$, $\Bo$ and $\Oh$ of whatever fell in each. The
+dataset spans $\Oh=0.0139\ldots0.7865$ and $\Bo=0.0037\ldots0.4197$, so a single window mixes
+fluids differing by $33$--$54\times$ in $\Oh$, and the experimental $t_c$ values \emph{within} one
+window already differ by $1.35$--$1.48\times$ --- comparable to the ``discrepancy'' being
+attributed to the model. The residual table then compared a mixed-parameter simulation curve
+against a median over that mixture. The confound was noted when the script was written and not
+acted upon for several rounds of investigation.
+
+A related trap, recorded so it is not repeated: the spreadsheet's ``Figure 5'' experimental block
+sits at $\Oh\approx0.042$, $\Bo\approx0.005$, matching \emph{neither} the paper's water case
+($0.017$, $0.006$) nor its oil case ($0.056$, $0.058$), and its \path{km_model} column is at a
+fixed $\Bo=0.0189$, $\Oh=0.0304$. The spreadsheet's figure numbering does not correspond to the
+manuscript in \path{references/}, so which experimental subset pairs with which model curve is
+still unresolved.
+
+\paragraph{What was eliminated along the way.} Each by measurement, and each still worth knowing:
 
 \begin{center}
 \begin{tabular}{lll}
 \toprule
 Candidate & Test & Outcome \\
 \midrule
-metric definition & \path{threshold_contact_time} vs.\ \path{contact_time} & real but small: $0.6$ of $\sim2.0$ \\
-drop viscous closure & \texttt{:reid} vs.\ \texttt{:lamb} & differ in the 4th digit \\
-bath radius (reflected waves) & \path{debug_bath_radius_sensitivity.jl} & flat: $4.9402,4.9613,4.9614,4.9614$ \\
- & $b=6,12,20,30$, $M\propto b$ & for $b=6,12,20,30$ \\
+metric definition & \path{threshold_contact_time} vs.\ \path{contact_time} & real, and it does differ \\
+drop viscous closure & \texttt{:reid} vs.\ \texttt{:lamb} & 4th digit \\
+bath radius (reflected waves) & \path{debug_bath_radius_sensitivity.jl} & flat: $4.9402$, $4.9613$, \\
+ & $b=6,12,20,30$ with $M\propto b$ & $4.9614$, $4.9614$ \\
+contact-edge rule & \texttt{:crossing} (the reference's own rule) & unchanged to 3 digits \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-The bath-radius result deserves a note: $b=6$ is flagged as unvalidated in
-the open-questions section of \path{provenance.tex} and in \path{paper-formulation.tex}, with a prior
-measurement of $11\%$ CoR movement between $b=6$ and $b=4$. It is a genuine open question and it
-is \emph{not} the cause of this symptom.
+$b=6$ remains unvalidated per \path{provenance.tex}; it is now measured as \emph{not} affecting
+the contact time.
 
 \section{What is actually wrong}
 
@@ -51,6 +88,11 @@ Tracing a contact (\path{debug_contact_exit_trace.jl}, \path{debug_feasibility_c
         $\theta=10^{-4}$, $\inf\mathcal F$ collapses by a factor of $200$, and the patch never
         recovers.
 \end{itemize}
+
+\emph{None of this explains a contact-time error, because there is none to explain.} What follows
+stands on its own: the rule is degenerate, that degeneracy is real and reproducible, and it
+produces a physically indefensible patch at low $\We$. It is a defect worth fixing for its own
+sake, not the cause of a symptom that turned out to be an artefact.
 
 The search is not at fault. A brute-force scan (\path{debug_selector_rate_limit.jl}) shows
 \path{select_theta_c} returning within $0.3$--$4\%$ of the true $\inf\mathcal F$ at every step.
@@ -147,10 +189,11 @@ is used instead, seeded from the previous step and, at onset, from \path{onset_t
 
 \section{Scope}
 
-This note establishes that the current rule is degenerate and derives the residual that replaces
-it. It does \emph{not} establish that tangency selection reproduces the experimental $t_c$: that
-is a measurement, made after implementation, against
-\path{data/experiments/contact_time_vs_we.csv} and the $r_c(t)$ series of Figure 6(b). Nor does it
+This note establishes that the current rule is degenerate. It does \emph{not} establish that any
+replacement improves an observable --- and the measurement that was supposed to demonstrate that
+turned out to be measuring a comparison artefact. \texttt{:crossing}, which is the reference's own
+rule, changes $t_c$ by less than $0.2\%$. Any future claim here must be made against
+\emph{parameter-matched} experimental data, matching $\Bo$ and $\Oh$ and not $\We$ alone. Nor does it
 revisit the upper edge of the admissible band, where $f<0$ and $p<0$ already exclude wide patches;
 whether that exclusion is itself too aggressive is a separate question.
 
