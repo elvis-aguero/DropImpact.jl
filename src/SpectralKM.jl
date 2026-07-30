@@ -41,6 +41,7 @@ export run_simulation, contact_step, inner_solve, onset_theta_c, free_flight_ste
 export initial_level, gap_at_pole, select_theta_c, feasible_at, contact_quad
 export coefficient_of_restitution, contact_time, max_penetration_depth
 export contact_intervals, primary_contact_time, threshold_contact_time
+export threshold_crossings, threshold_coefficient_of_restitution
 export reconstruct_bath, reconstruct_drop
 
 end # module SpectralKM

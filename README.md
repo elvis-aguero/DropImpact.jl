@@ -344,30 +344,47 @@ curves and none of the five experimental points.
 > values, notably the δ deficit at oil `We ≥ 3.9`, inherit that. Conclusions about the
 > solver do not.
 
-| | We | experiment | this model | residual |
-|---|---|---|---|---|
-| water | 0.7251 | `4.6628 ± 0.1887` | `4.5039` | **−3.4 %**, 0.84 σ |
-| oil | 1.2158 | `4.6598 ± 0.2196` | `5.0787` | **+9.0 %**, 1.91 σ |
+All 17 experimental points, both fluids, all three metrics, at the default truncation. Mean
+**|relative error|**, with the published models on the same points:
 
-Water sits inside the measurement scatter and low — the direction the paper reports
-for its own model. **Oil is the open finding**: the sign flips, and it is not
-explained by any available knob. `:crossing` moves it 0.03 %, `:lamb` moves it
-0.24 %, and the metric-definition offset below is ~2 % for oil. Only the lowest of
-the twelve oil points has been run at production truncation so far; whether +9 %
-persists across `We` is what the dispatched CI sweep answers.
+**Oil** (12 points, `Bo = 0.056`, `Oh = 0.058`)
 
-For scale, the published models against the *same* twelve oil points, interpolated
-from the figure's own curves:
+| metric | SpectralKM | 1PKM | DNS |
+|---|---|---|---|
+| **contact time** | **2.7 %** | 11.0 % | 3.3 % |
+| CoR `α` | 36.8 % | 5.3 % | 8.0 % |
+| `δ/R` | 25.4 % | 12.3 % | 5.6 % |
 
-| | mean residual | range | within 1 σ | within 2 σ |
-|---|---|---|---|---|
-| 1PKM (quasi-potential) | −8.67 % | −18.08 % … +11.20 % | 2/12 | 6/12 |
-| DNS | +0.40 % | −6.31 % … +12.58 % | 9/12 | 11/12 |
+**Water** (5 points, `Bo = 0.017`, `Oh = 0.006`)
 
-1PKM overpredicts at low `We` — `+11.20 %`, 2.38 σ at `We = 1.2158`, where this
-model gives `+9.0 %` — crosses over near `We ≈ 1.8`, and decays to `−18 %` at
-`We = 7.31` while the measured contact time stays flat. That decay is the paper's
-own reported underprediction at intermediate `We`.
+| metric | SpectralKM | 1PKM | DNS |
+|---|---|---|---|
+| contact time | 11.5 % | 7.9 % | 6.1 % |
+| CoR `α` | 4.9 % | 1.2 % | 3.7 % |
+| `δ/R` | **8.9 %** | 11.9 % | 2.9 % |
+
+**The oil contact time is the headline.** 2.7 % mean error with a signed bias of **−0.2 %** — four
+times better than the published quasi-potential model and better than the fully resolved DNS — and
+closer to the measurement at *every one* of the 12 points, 10 of 12 inside 1 sd and 12 of 12 inside
+2 sd. The measured contact time is nearly flat across `We = 1.2…7.3` and so is this model's (5.02 to
+5.08), whereas 1PKM decays monotonically from 5.18 to 4.31.
+
+**Two open failures, and they share a suspect.** `α` is sound at water's `Oh = 0.006` (4.9 %, and
+correctly *decreasing* with `We`) but 36.8 % at oil's `Oh = 0.058` with the **trend reversed** — the
+measurement rises 0.237 → 0.269 across the oil range, a feature the paper singles out as
+oil-specific, and this model falls 0.177 → 0.139. `δ` under-predicts everywhere, 8.9 % in water
+(better than 1PKM) but 25.4 % in oil. So both *amplitude* metrics degrade as `Oh` rises by 9.4×
+while the contact *timescale* does not, which points at the viscous coupling rather than the contact
+closure.
+
+**Overall it does not supersede 1PKM**: across all 51 point-by-point comparisons this model is
+closer at 16 and 1PKM at 35. It wins the oil contact-time comparison outright and loses both energy
+metrics there. That scoreboard is asserted in `test/test_fluid_sweep_results.jl` so it cannot drift
+in this prose.
+
+Reproduce with `scripts/compare_fluid_experiment.jl` (507 s for oil, 198 s for water on 12 cores)
+and re-plot with `scripts/plot_fluid_comparison.jl`; results are stored in
+`data/experiments/model_vs_experiment_{oil,water}.csv` and plotted to `comparison_{oil,water}.svg`.
 
 > ⚠️ **The two sides do not measure the same thing.** The experiment times the
 > **north pole crossing `z = 2R`**, because the detachment instant was not optically
