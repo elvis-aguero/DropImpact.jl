@@ -18,3 +18,8 @@ derivations/*.synctex.gz
 
 # rendered media: the README gif is tracked, full-resolution mp4s are not
 output/media/*.mp4
+
+# comparison-run outputs: regenerate with scripts/compare_experiments.jl
+data/experiments/sim_cache_v2.csv
+data/experiments/shard_*.csv
+data/experiments/comparison*.svg

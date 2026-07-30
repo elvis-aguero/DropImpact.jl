@@ -180,6 +180,7 @@ end
     # justified beside DEFAULT_M in src/types.jl from the measured cost asymmetry (L nearly
     # free, M and nq linear, N cheap only inside the budget).
     p = Params(We=1.0958, Bo=0.017, Oh=0.006, b=6.0, h0=3.0)
+    @test p.viscous === SpectralKM.DEFAULT_VISCOUS
     @test p.M == SpectralKM.DEFAULT_M
     @test p.L == SpectralKM.DEFAULT_L
     @test p.N == SpectralKM.DEFAULT_N

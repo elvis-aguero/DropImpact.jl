@@ -7,6 +7,7 @@ using ForwardDiff
 include("legendre.jl")
 include("bessel.jl")
 include("quadrature.jl")
+include("reid.jl")
 include("types.jl")
 include("geometry.jl")
 include("pressure.jl")
@@ -19,6 +20,9 @@ include("postprocessing.jl")
 
 export Params, Level, SimHistory, Phase, FreeFlight, InContact
 export resolvable_rank_estimate, min_nq_for_exact_com
+export reid_root, reid_root_tracked, reid_real_roots, reid_pole_pair
+export sph_bessel_ratio, reid_first_singularity
+export lamb_eigenvalue, drop_viscous_coeffs
 export legendre_P, legendre_dP, bonnet_H
 export bessel_zeros_J1, bessel_zeros_J0
 export gauss_legendre_nodes
@@ -32,7 +36,7 @@ export newton_solve, NewtonResult, NewtonStatus, Converged, MaxIterExceeded, Sta
 export run_simulation, contact_step, inner_solve, onset_theta_c, free_flight_step
 export initial_level, gap_at_pole, select_theta_c, feasible_at, contact_quad
 export coefficient_of_restitution, contact_time, max_penetration_depth
-export contact_intervals, primary_contact_time
+export contact_intervals, primary_contact_time, threshold_contact_time
 export reconstruct_bath, reconstruct_drop
 
 end # module SpectralKM
