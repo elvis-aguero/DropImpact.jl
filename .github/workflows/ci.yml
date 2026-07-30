@@ -83,7 +83,9 @@ jobs:
   #   gh workflow run CI -f job=selector_regression
   #
   selector-regression:
-    name: Selector regression vs experiment (${{ matrix.selector }})
+    # Static, for the same reason as the job below: on push/PR this job is skipped but its name is
+    # still rendered, and `matrix` is not available there either.
+    name: Selector regression vs experiment
     if: github.event_name == 'workflow_dispatch' && inputs.job == 'selector_regression'
     runs-on: ubuntu-latest
     timeout-minutes: 350
