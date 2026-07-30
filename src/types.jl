@@ -40,6 +40,9 @@ struct Params
     h0::Float64
     nq::Int
     selector::Symbol
+    viscous::Symbol
+    drop_lambda::Vector{Float64}
+    drop_omega2::Vector{Float64}
     wall::Symbol
     k::Vector{Float64}
     bath_norm::Vector{Float64}
@@ -140,8 +143,57 @@ const DEFAULT_NQ = 200
 #                behaviour. Derived in derivations/tangency-selector.tex.
 const DEFAULT_SELECTOR = :feasible
 
+# Viscous model for the DROP modes.
+#
+#   :lamb -- lambda_l = Oh(l-1)(2l+1), omega_l^2 = l(l-1)(l+2). Lamb's (1881) small-viscosity
+#            asymptotics. The published model, and what DropRebound.jl/DropSolver uses too.
+#   :reid -- exact roots of Reid's (1960) characteristic equation, valid at arbitrary Oh.
+#
+# DEFAULT IS :reid. The reasoning, since this was reversed after review: at the small Oh where
+# experiments exist, the two are experimentally INDISTINGUISHABLE (CoR identical to 4 digits),
+# so :reid cannot be worse against any available data. At Oh >~ 0.05, :lamb is PROVABLY wrong by
+# 23-97% while :reid is exact in theory and merely untested. Defaulting to a known-invalid model
+# in the regime where neither is validated is the wrong trade -- :reid weakly dominates. Pass
+# viscous=:lamb to reproduce the published small-Oh model bit-for-bit.
+#
+# Measured against Reid, Lamb
+# OVERPREDICTS the damping by 4.1% at l=2 and 22.9% at l=120 even at production Oh = 0.006,
+# and by 23-97% across l = 2..16 at Oh = 0.1. See src/reid.jl for the table and for what the
+# substitution does and does not capture.
+#
+# READINESS OF :reid AS A FUTURE DEFAULT -- measured, all clear:
+#
+#   live impact    completes at Oh = 0.006, 0.05, 0.2. At production Oh the observables are
+#                  essentially unchanged (CoR identical to 4 digits, t_c 3.8145 -> 3.7942, i.e.
+#                  0.5%), so switching would not materially move published numbers. The
+#                  difference grows with Oh and points the physically right way -- Lamb
+#                  over-damps, so it loses too much energy and UNDER-predicts CoR; :reid
+#                  corrects upward by +0.4% at Oh = 0.05 and +1.7% at Oh = 0.2.
+#   stiffness      omega2/omega_{l,0}^2 runs 0.9992 -> 0.9663 monotonically over l = 2..120 at
+#                  production Oh: 3.4% worst case, all damping positive, all finite.
+#   cost           +1.26 s once per Params at L = 120, against a ~130 s run. The :reid run was
+#                  in fact marginally faster overall.
+#   overdamped     at Oh = 0.2, 80 modes (l = 41..120) take the real-pair Vieta branch with
+#                  lambda up to ~1e3 and the run completes cleanly -- the stiff path works in a
+#                  real simulation, not only in unit tests.
+#
+# WHAT IS STILL NOT ESTABLISHED (a caveat on the claim, no longer a reason to withhold the
+# default): "more faithful to linear viscous theory" is NOT "matches experiment better", and
+# only the former is verified.
+# The +1.7% CoR shift at Oh = 0.2 is the one place the change is visible, and it is exactly
+# there that nothing has been compared against DNS or experiment. If that shift moves AWAY from
+# ground truth it would indicate the two-pole forcing gap (or something else) dominating at
+# moderate Oh. A comparison against Alventosa et al. or DNS at Oh >~ 0.05 remains worth doing --
+# but note it can only ever CONFIRM or REFINE :reid, since :lamb is already known wrong there.
+#
+# NOTE FOR THE PAPER: this switch moves t_c by 0.5% at production Oh (3.8145 -> 3.7942) with CoR
+# unchanged to 4 digits. Small, but not nothing -- any figure regenerated after this commit
+# differs slightly from one generated before it, and the closure should be named in the text.
+const DEFAULT_VISCOUS = :reid
+
 """
-    Params(; We, Bo, Oh, b, h0, wall=:free, M, L, N, nq, check_budget=true)
+    Params(; We, Bo, Oh, b, h0, wall=:free, M, L, N, nq,
+             selector=DEFAULT_SELECTOR, viscous=DEFAULT_VISCOUS, check_budget=true)
 
 Only the PHYSICAL inputs are required: the Weber, Bond and Ohnesorge numbers and the bath
 geometry `b, h0`. The numerical truncations `M, L, N, nq` default to
@@ -217,11 +269,13 @@ the bath eigenvalues and the Fourier-Bessel weight (design doc eq:bessel-norm):
 function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
                 M::Integer=DEFAULT_M, L::Integer=DEFAULT_L, N::Integer=DEFAULT_N,
                 nq::Integer=DEFAULT_NQ, selector::Symbol=DEFAULT_SELECTOR,
-                check_budget::Bool=true)
+                viscous::Symbol=DEFAULT_VISCOUS, check_budget::Bool=true)
     selector in (:crossing, :feasible) ||
         throw(ArgumentError("selector must be :crossing or :feasible, got $selector"))
     wall in (:free, :pinned, :clamped) ||
         throw(ArgumentError("wall must be :free, :pinned or :clamped, got $wall"))
+    viscous in (:lamb, :reid) ||
+        throw(ArgumentError("viscous must be :lamb or :reid, got $viscous"))
 
     # Guard the one failure mode that is silent: N provisioned past the resolvable-rank
     # budget. Past it, the inner solve is ill-conditioned, the reported pointwise pressure
@@ -253,7 +307,9 @@ function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
     nodes, weights = gauss_legendre_nodes(nq)
     com_nq = min_nq_for_exact_com(N, L)
     com_nodes, com_weights = gauss_legendre_nodes(com_nq)
-    return Params(We, Bo, Oh, M, L, N, b, h0, nq, selector, wall, kvals, bath_norm, j0kb,
+    drop_lambda, drop_omega2 = drop_viscous_coeffs(L, Oh, viscous)
+    return Params(We, Bo, Oh, M, L, N, b, h0, nq, selector, viscous, drop_lambda, drop_omega2,
+                  wall, kvals, bath_norm, j0kb,
                   nodes, weights, com_nodes, com_weights)
 end
 
