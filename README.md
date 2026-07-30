@@ -204,20 +204,60 @@ measured improvement.
 > orders of magnitude. `:reid` remains the better closure, and it moves the contact
 > time *toward* experiment, but not by an amount that decides anything.
 
-### Contact-edge rule: `selector = :feasible | :crossing`
+### Contact-edge rule: `selector = :crossing | :feasible`
 
-`:feasible` (default) takes `θ_c = inf{θ : non-intersection and monotone-r}`.
-`:crossing` is the 1PKM reference implementation's rule — the largest crossing of
-the droplet and bath surfaces, held at its previous value when they do not cross.
+`:crossing` (default) is the 1PKM reference implementation's rule — the largest
+crossing of the droplet and bath surfaces, held at its previous value when they do
+not cross. `:feasible` is the former default, `θ_c = inf{θ : non-intersection and
+monotone-r}`, retained only to reproduce results generated before the change.
 
-`:feasible` is known to be **degenerate**: once non-intersection stops binding the
-infimum is `0` regardless of the gap's size, and the patch can collapse by 200× in
-a single `1e-3` step without recovering. `:crossing` fixes that collapse and is the
-published rule, yet it is *not* the default, because it does not change the
-observable: contact time moves by 0.03 % on oil and by less than three digits on
-water (6.3312 vs 6.3218 at `We = 0.0231`). Switching would alter every stored
-result while resolving nothing currently under investigation. Opt in explicitly.
-Derived in `derivations/tangency-selector.tex`.
+`:feasible` is **degenerate**: once non-intersection stops binding the infimum is
+`0` regardless of the gap's size. At low `We` that merely lets the patch collapse
+by 200× in a single step; at high `We` it destroys the solution. At `We = 7.307` in
+oil it holds contact for 21 steps — duration 0.194 against a *measured* 5.26 — then
+detaches, after which the drop free-falls to `z_cm = −84.2` by `τ = 30` and never
+re-contacts, so there is no contact time to report at all.
+
+> An earlier revision of this file said the default was deliberately left at
+> `:feasible` because `:crossing` changed no observable. **That was measured at two
+> low-`We` water points and is retracted.** The switch was gated on both observables
+> the experiments report, at default truncation, five anchor points across both
+> fluids, each rule on identical hardware:
+>
+> | fluid | We | tc `:feasible` | tc `:crossing` | δ `:feasible` | δ `:crossing` |
+> |---|---|---|---|---|---|
+> | water | 0.7251 | 4.49560 | 4.49657 | 0.66951 | 0.66900 |
+> | water | 1.9387 | 4.42119 | 4.42242 | 0.95812 | 0.95736 |
+> | oil | 1.2158 | 5.07868 | 5.08034 | 0.72344 | 0.72301 |
+> | oil | 3.9463 | 5.01559 | 5.01686 | 1.07481 | 1.07417 |
+> | oil | 7.3070 | **none** | 5.03505 | 0.30009 | **1.33536** |
+>
+> Wherever `:feasible` answers at all the two agree to four significant figures — at
+> most 0.03 % in `tc`, 0.08 % in `δ` — so the change cannot regress a case that
+> already worked, and where `:feasible` fails it fails completely. Low-`We` numbers
+> regenerated after this change move in their fourth digit; high-`We` oil numbers
+> change qualitatively, because they were not physical before.
+
+Derived in `derivations/tangency-selector.tex`; gated by
+`test/test_experiment_regression.jl` in the `selector-regression` CI job
+(`gh workflow run CI -f job=selector_regression`).
+
+**What the switch did not fix.** Maximum penetration depth is under-predicted,
+identically under both rules, so it is not selector-related:
+
+| fluid | We | δ here | δ 1PKM | δ measured |
+|---|---|---|---|---|
+| oil | 1.2158 | 0.7230 (−1.60σ) | 0.7415 (−1.30σ) | 0.8229 ± 0.0626 |
+| oil | 3.9463 | 1.0742 (−4.69σ) | 1.2811 (−2.65σ) | 1.5495 ± 0.1013 |
+| oil | 7.3070 | 1.3354 (−4.40σ) | 1.7042 (−2.15σ) | 2.0558 ± 0.1637 |
+
+A δ deficit is a property of the reduced-model class — over the twelve oil points
+1PKM averages −1.64σ (−12.3 %) and clears 2σ at 8/12, while the DNS averages −0.71σ
+and clears it at 12/12 — but this package under-predicts about twice as far as 1PKM
+at moderate and high `We`, *while predicting contact time better than 1PKM there*
+(−0.85σ against −3.61σ at `We = 7.307`). Getting the duration right and the depth
+wrong says something specific about where the linearisation fails. Open, and
+recorded as `@test_broken` so that fixing it fails the suite and forces a revisit.
 
 ### Wall condition
 

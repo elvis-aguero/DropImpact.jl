@@ -30,10 +30,15 @@ const HERE = @__DIR__
 const DATA = joinpath(HERE, "..", "data", "experiments")
 const R_EXP = 3.5e-4      # AlventosaEtAl2023 table 1: R = 0.35 mm for both fluids
 
+# `parse(String, s)` does not exist, so a String-valued flag has to be returned verbatim rather
+# than parsed. Getting this wrong made --selector/--viscous throw a MethodError on the first CI
+# dispatch, before a single simulation had run.
 function argval(flag, default)
     i = findfirst(==(flag), ARGS)
     i === nothing && return default
-    return parse(typeof(default), ARGS[i+1])
+    i == length(ARGS) && error("$flag needs a value")
+    v = ARGS[i+1]
+    return default isa AbstractString ? v : parse(typeof(default), v)
 end
 
 read_csv(p) = let raw = readdlm(p, ','; header=true)

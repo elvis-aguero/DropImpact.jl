@@ -168,6 +168,7 @@ The search is not at fault. A brute-force scan (\path{debug_selector_rate_limit.
 The \emph{rule} is at fault.
 
 \section{The degeneracy, stated precisely}
+\label{sec:degeneracy}
 
 Write the gap as $C(\theta,\tau)=\eta(r(\theta,\tau),\tau)-z_{cm}+z_d(\theta,\tau)$. The
 kinematic match imposes $C=0$ on $[0,\theta_c]$; physical consistency requires $C<0$ beyond the
@@ -256,16 +257,91 @@ oscillatory $J_0$ terms, $T$ can change sign more than once on $(0,\pi)$, so a p
 a sign change is not safe; the argmin form of \texttt{eq:theta-c-argmin} over admissible candidates
 is used instead, seeded from the previous step and, at onset, from \path{onset_theta_c}.
 
+\section{The degeneracy is fatal at high Weber number: \texttt{:crossing} becomes the default}
+\label{sec:crossing-default}
+
+An earlier revision of this note closed by saying that the degeneracy, though real, changed no
+observable, and \path{DEFAULT_SELECTOR} was therefore left at \texttt{:feasible}. \textbf{That
+verdict was drawn from too narrow a sample and is retracted here.} It rested on two low-Weber water
+points, $\We=0.0231$ and $\We=0.9985$, where the two rules agree to three digits. They do. At high
+$\We$ they do not agree at all: one returns a physical trajectory and the other returns a droplet
+that sinks.
+
+At $\We=7.307$ in $5$~cSt silicone oil ($\Bo=0.0563$, $\Oh=0.0578$), \texttt{:feasible} holds
+contact for $21$ steps --- a duration of $0.194$ against a measured $5.26$ --- then detaches, after
+which the droplet free-falls to $z_{cm}=-84.2$ by $\tau=30$ and never re-contacts. No contact time
+exists to report. Under \texttt{:crossing} the same case gives contact over $(0,4.229)$, a rebound
+to $z_{cm}=2.239$, and further contacts at $\tau\in(18.33,22.15)$ and $\tau>29.38$: a physical
+multi-bounce trajectory. This is the degeneracy of \S\ref{sec:degeneracy} at full strength --- once
+non-intersection stops binding, $\inf\{\theta:\ \text{feasible}\}$ is $0$ regardless of the gap, and
+at high $\We$ that happens almost immediately rather than late in contact.
+
+\subsection{The change is a strict improvement, measured}
+
+The switch was gated on both observables the experiments report, at the default truncation
+($M=60$, $L=120$, $N=3$, $n_q=200$), at five anchor points spanning both working fluids, with each
+rule run on identical hardware. Contact time is $t_c/t_\sigma$; $\delta$ is the maximum penetration
+depth of the droplet's south pole, taken over the \emph{first} contact interval.
+
+\begin{center}
+\begin{tabular}{llrrrr}
+\hline
+fluid & $\We$ & $t_c$ \texttt{:feasible} & $t_c$ \texttt{:crossing} & $\delta$ \texttt{:feasible} & $\delta$ \texttt{:crossing} \\
+\hline
+water & 0.7251 & 4.49560 & 4.49657 & 0.66951 & 0.66900 \\
+water & 1.9387 & 4.42119 & 4.42242 & 0.95812 & 0.95736 \\
+oil   & 1.2158 & 5.07868 & 5.08034 & 0.72344 & 0.72301 \\
+oil   & 3.9463 & 5.01559 & 5.01686 & 1.07481 & 1.07417 \\
+oil   & 7.3070 & \emph{none} & 5.03505 & 0.30009 & 1.33536 \\
+\hline
+\end{tabular}
+\end{center}
+
+Wherever \texttt{:feasible} produces an answer at all the two rules agree to four significant
+figures --- at most $0.03\%$ in $t_c$ and $0.08\%$ in $\delta$ --- so \texttt{:crossing} cannot be
+said to regress any case that previously worked. Where \texttt{:feasible} fails it fails completely.
+That is a strict improvement, and it is why the default changes. The cost of the change to stored
+results is correspondingly small: any low-$\We$ number regenerated after this commit moves in its
+fourth digit, and any high-$\We$ oil number changes qualitatively because it was not physical
+before.
+
+\subsection{What the gate did \emph{not} vindicate: $\delta$}
+
+The same measurement exposes a separate deficit that is \emph{not} selector-related, since it is
+identical to four figures under both rules. Against the published quasi-potential model (1PKM),
+interpolated from the same figures the experimental points were read from:
+
+\begin{center}
+\begin{tabular}{llrrr}
+\hline
+fluid & $\We$ & $\delta$ here & $\delta$ 1PKM & $\delta$ measured \\
+\hline
+oil & 1.2158 & 0.7230 ($-1.60\sigma$) & 0.7415 ($-1.30\sigma$) & $0.8229\pm0.0626$ \\
+oil & 3.9463 & 1.0742 ($-4.69\sigma$) & 1.2811 ($-2.65\sigma$) & $1.5495\pm0.1013$ \\
+oil & 7.3070 & 1.3354 ($-4.40\sigma$) & 1.7042 ($-2.15\sigma$) & $2.0558\pm0.1637$ \\
+\hline
+\end{tabular}
+\end{center}
+
+Under-prediction of $\delta$ is a property of the reduced-model class, not of this package: over the
+twelve oil points 1PKM averages $-1.64\sigma$ ($-12.3\%$) and clears $2\sigma$ at only $8$ of $12$,
+while the DNS averages $-0.71\sigma$ and clears it at all $12$. But this package under-predicts
+$\delta$ roughly twice as far as 1PKM does at moderate and high $\We$, while simultaneously
+predicting $t_c$ \emph{better} than 1PKM there ($-0.85\sigma$ against $-3.61\sigma$ at
+$\We=7.307$). A model that gets the contact duration right and the penetration depth wrong is
+saying something specific about where its linearisation fails, and that is open.
+
 \section{Scope}
 
-This note establishes that the current rule is degenerate. It does \emph{not} establish that any
-replacement improves an observable --- and the measurement that was supposed to demonstrate that
-turned out to be measuring a comparison artefact. \texttt{:crossing}, which is the reference's own
-rule, changes $t_c$ by less than $0.2\%$. Any future claim here must be made against data for the
-\emph{same physical problem} --- a bath, not a solid substrate --- and then
-\emph{parameter-matched}, on $\Bo$ and $\Oh$ and not $\We$ alone. Nor does it
+This note establishes that the current rule is degenerate, and \S\ref{sec:crossing-default}
+establishes that the degeneracy destroys the high-$\We$ solution outright, which is why
+\texttt{:crossing} is now the default. What remains open is the $\delta$ deficit above, which is
+selector-independent and roughly twice 1PKM's at moderate $\We$. Any future claim here must be made
+against data for the \emph{same physical problem} --- a bath, not a solid substrate --- and then
+\emph{parameter-matched}, on $\Bo$ and $\Oh$ and not $\We$ alone. Nor does this note
 revisit the upper edge of the admissible band, where $f<0$ and $p<0$ already exclude wide patches;
-whether that exclusion is itself too aggressive is a separate question.
+whether that exclusion is itself too aggressive is a separate question, and the $\delta$ deficit
+makes it a more interesting one --- too aggressive an upper edge would under-predict penetration.
 
 \begin{thebibliography}{9}
 \bibitem{AlventosaEtAl2023} L.~F.~L. Alventosa, R. Cimpeanu, D.~M. Harris,

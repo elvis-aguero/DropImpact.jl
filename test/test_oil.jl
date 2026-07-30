@@ -8,9 +8,13 @@
 # M = 60, L = 120, N = 3, nq = 200, b = 6, h0 = 3, t_end = 14:
 #
 #   selector    closure   tc         vs experiment 4.659815 +/- 0.219633
-#   :feasible   :reid     5.078683   +9.0%,  1.91 sd
-#   :crossing   :reid     5.080336   +9.0%,  1.91 sd      selector: 0.03% -- not the cause
+#   :crossing   :reid     5.080336   +9.0%,  1.91 sd      <- the default since the selector switch
+#   :feasible   :reid     5.078683   +9.0%,  1.91 sd      selector: 0.03% -- not the cause
 #   :feasible   :lamb     5.091248   +9.3%,  1.96 sd      closure:  0.24% -- not the cause
+#
+# The selector makes no difference AT THIS We, which is why it is listed here as not the cause. It
+# makes all the difference at We = 7.307, where :feasible loses contact after 0.194 and the drop
+# sinks; that is why the default changed. See DEFAULT_SELECTOR in src/types.jl.
 #
 # SO THE OIL RESIDUAL IS NOT EXPLAINED BY EITHER KNOB, and it points the OPPOSITE way from water,
 # where the same code at the same truncation gives -3.4% (0.84 sd). Three things this is not:
@@ -98,9 +102,10 @@ end
     # wrong-problem comparison immediately.
     @test tct > 3.4
 
-    # Measured 5.078683. Pinned to 1% so a real change in the closure has to declare itself, while
-    # step-controller noise does not.
-    @test tct ≈ 5.078683 rtol = 0.01
+    # Measured 5.080336 under the default :crossing (5.078683 under :feasible -- 0.03% apart).
+    # Pinned to 1% so a real change in the closure has to declare itself, while step-controller
+    # noise does not.
+    @test tct ≈ 5.080336 rtol = 0.01
 
     # AGAINST EXPERIMENT. Deliberately asserted as OVERPREDICTING by 5-15%: that sign is the open
     # finding, it is the opposite of the water case (-3.4%) and of the reference model's reported
