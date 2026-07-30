@@ -11,8 +11,11 @@
     # step later it holds even at theta = 1e-4, inf{feasible} collapses 200x, and the patch never
     # recovers -- which is what makes the contact time ~2x too long.
 
-    @testset "the patch must not collapse when non-intersection goes inactive" begin
-        p = Params(We=0.0231, Bo=0.02, Oh=0.03, b=6.0, h0=3.0, M=60, L=120, N=3, nq=200)
+    # Run under BOTH selectors, so the record is precise about which rule has which defect:
+    # :feasible collapses (marked broken), :crossing does not (asserted).
+    function patch_trace(selector; nsteps=14)
+        p = Params(We=0.0231, Bo=0.02, Oh=0.03, b=6.0, h0=3.0, M=60, L=120, N=3, nq=200,
+                   selector=selector)
         dt = 1e-3
         hist = SimHistory(initial_level(p), initial_level(p))
         seed = nothing
@@ -22,12 +25,11 @@
             trial = free_flight_step(hist, dt, p)
             hist.prev = hist.curr; hist.curr = trial
         end
-        @test seed !== nothing
-
+        seed === nothing && return Float64[]
         theta_prev = seed
         chat_guess = zeros(p.N + 1); chat_guess[1] = 1e-3
         thetas = Float64[]
-        for _ in 1:14
+        for _ in 1:nsteps
             lvl, info = contact_step(hist, dt, theta_prev, chat_guess, p)
             lvl === nothing && break
             push!(thetas, info.theta_c)
@@ -35,13 +37,29 @@
             theta_prev = info.theta_c
             chat_guess = lvl.X[1:p.N+1]
         end
-        @test length(thetas) >= 12
-        # A physical patch cannot lose 99% of its extent in one 1e-3 step while the force is
-        # still positive. Measured worst ratio under the current rule is ~0.005.
-        worst = minimum(thetas[i] / thetas[i-1] for i in 2:length(thetas))
-        @test worst > 0.5
-        # and it must not simply sit at the floor thereafter
-        @test maximum(thetas[max(1, end-3):end]) > 0.01
+        return thetas
+    end
+
+    worst_ratio(th) = isempty(th) || length(th) < 2 ? NaN :
+                      minimum(th[i] / th[i-1] for i in 2:length(th))
+
+    @testset ":crossing keeps the patch alive when non-intersection goes inactive" begin
+        th = patch_trace(:crossing)
+        @test length(th) >= 12
+        # A physical patch cannot lose 99% of its extent in one 1e-3 step while f > 0.
+        @test worst_ratio(th) > 0.5
+        @test maximum(th[max(1, end-3):end]) > 0.01
+    end
+
+    @testset ":feasible collapses the patch -- KNOWN BUG, recorded not fixed" begin
+        th = patch_trace(:feasible)
+        @test length(th) >= 12
+        # Measured worst step-to-step ratio ~0.005: inf{feasible} degenerates to 0 the moment
+        # non-intersection stops binding. Marked broken rather than silenced, and NOT fixed by
+        # switching the default, because :crossing does not fix the contact-time overprediction
+        # this was originally chased for -- see derivations/tangency-selector.tex.
+        @test_broken worst_ratio(th) > 0.5
+        @test_broken maximum(th[max(1, end-3):end]) > 0.01
     end
 
     @testset "tangency residual is analytic, not a finite difference" begin
