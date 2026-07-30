@@ -22,10 +22,11 @@ on:
         type: choice
         options: [reid, lamb]
         default: reid
-      run_selector_regression:
-        description: "Run the selector regression gate (both rules, 5 anchor points each, hours)"
-        type: boolean
-        default: false
+      job:
+        description: "Which dispatched job to run"
+        type: choice
+        options: [fluid_experiment, selector_regression]
+        default: fluid_experiment
 
 jobs:
   julia-tests:
@@ -79,11 +80,11 @@ jobs:
   # right? `fail-fast: false` so the :feasible leg still reports even when it fails, since HOW it
   # fails is the evidence.
   #
-  #   gh workflow run CI -f run_selector_regression=true
+  #   gh workflow run CI -f job=selector_regression
   #
   selector-regression:
     name: Selector regression vs experiment (${{ matrix.selector }})
-    if: github.event_name == 'workflow_dispatch' && inputs.run_selector_regression
+    if: github.event_name == 'workflow_dispatch' && inputs.job == 'selector_regression'
     runs-on: ubuntu-latest
     timeout-minutes: 350
     strategy:
@@ -114,7 +115,7 @@ jobs:
     # Static name: `inputs` does not exist for push/pull_request events, so interpolating it here
     # renders the raw ${{ }} expression in the checks list on every PR.
     name: Contact time vs bath experiment
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.job == 'fluid_experiment'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
