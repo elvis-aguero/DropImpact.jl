@@ -8,6 +8,7 @@ include("legendre.jl")
 include("bessel.jl")
 include("quadrature.jl")
 include("reid.jl")
+include("fluids.jl")
 include("types.jl")
 include("geometry.jl")
 include("pressure.jl")
@@ -19,6 +20,8 @@ include("timestepper.jl")
 include("postprocessing.jl")
 
 export Params, Level, SimHistory, Phase, FreeFlight, InContact
+export Fluid, WATER, OIL_5CST, fluid, conditions, ImpactConditions
+export dynamic_viscosity, t_sigma, STANDARD_GRAVITY
 export resolvable_rank_estimate, min_nq_for_exact_com
 export reid_root, reid_root_tracked, reid_real_roots, reid_pole_pair
 export sph_bessel_ratio, reid_first_singularity

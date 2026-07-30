@@ -313,6 +313,31 @@ function Params(; We, Bo, Oh, b, h0, wall::Symbol=:free,
                   nodes, weights, com_nodes, com_weights)
 end
 
+"""
+    Params(c::ImpactConditions; b=nothing, h0=nothing, kwargs...)
+
+Build `Params` from a measured impact, so the dimensional properties reach the solver without a
+hand-computed `(We, Bo, Oh)` in between. See [`conditions`](@ref).
+
+The bath geometry comes from `c` when [`conditions`](@ref) was given a dimensional `bath_radius`
+and `bath_depth`; otherwise pass `b` and `h0` here in units of `R`, as usual. Every remaining
+keyword (`M`, `L`, `N`, `nq`, `wall`, `selector`, `viscous`, `check_budget`) forwards unchanged.
+
+```julia
+c = conditions(drop=:oil, R=3.5e-4, V0=0.6)      # 5 cSt oil, 0.35 mm, 60 cm/s
+p = Params(c; b=6.0, h0=3.0)
+```
+"""
+function Params(c::ImpactConditions; b=nothing, h0=nothing, kwargs...)
+    bb = b === nothing ? c.b : float(b)
+    hh = h0 === nothing ? c.h0 : float(h0)
+    bb === nothing && throw(ArgumentError(
+        "no bath radius: give `b` here in units of R, or `bath_radius` in metres to conditions()"))
+    hh === nothing && throw(ArgumentError(
+        "no bath depth: give `h0` here in units of R, or `bath_depth` in metres to conditions()"))
+    return Params(; We=c.We, Bo=c.Bo, Oh=c.Oh, b=bb, h0=hh, kwargs...)
+end
+
 """BathModeState: `a[m+1] = a_m(τ)`, `adot[m+1] = ȧ_m(τ)`, m = 0..M."""
 struct BathModeState
     a::Vector{Float64}

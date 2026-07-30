@@ -16,6 +16,7 @@ using SpecialFunctions: besseljx
 using ForwardDiff
 using LinearAlgebra
 
+include("test_fluids.jl")
 include("test_legendre.jl")
 include("test_bessel.jl")
 include("test_quadrature.jl")
