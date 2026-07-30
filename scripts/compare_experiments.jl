@@ -54,8 +54,26 @@ using Printf
 using Statistics
 
 const ROOT = dirname(@__DIR__)
-const TC_CSV = joinpath(ROOT, "data", "experiments", "contact_time_vs_we.csv")
-const COR_CSV = joinpath(ROOT, "data", "experiments", "cor_vs_we.csv")
+
+# ############################################################################################
+# WRONG-PROBLEM GUARD. The dataset this script was originally built around is the DROPLET-ONTO-
+# SOLID-SUBSTRATE problem, not the bath problem this repository models -- see the evidence box
+# in scripts/convert_experiments.py. Comparing against it produced a spurious factor-of-two
+# contact-time discrepancy that was investigated as a model defect for several rounds.
+#
+# On a rigid wall the low-We contact time is set by the drop's own l = 2 free oscillation
+# (2*pi/sqrt(8) = 2.2214 t_sigma; ~2.6 classically) and those data sit at 1.9..3.4. A bath
+# deforms and carries energy away in interfacial waves, so contact lasts LONGER: the bath
+# dataset spans 4.44..8.09 and this model gives 4.44 at the water point. The two problems have
+# genuinely different answers, so no amount of parameter matching reconciles them.
+#
+# Overlaying against the solid-substrate data is therefore opt-in and labelled, and the bath
+# reference below is what a claim about this model must be made against.
+# ############################################################################################
+const TC_CSV = joinpath(ROOT, "data", "experiments", "SOLID_SUBSTRATE_contact_time_vs_we.csv")
+const COR_CSV = joinpath(ROOT, "data", "experiments", "SOLID_SUBSTRATE_cor_vs_we.csv")
+const BATH_CSV = joinpath(ROOT, "data", "experiments", "bath_km_contact_time.csv")
+const ALLOW_SOLID = "--allow-solid-substrate" in ARGS
 # v2: `tc` now means threshold_contact_time (AlventosaEtAl2023's definition), NOT the
 # InContact duration stored by v1. v1 entries are unusable, hence the new filename rather
 # than silently mixing metrics.
@@ -317,6 +335,39 @@ function write_svg(path, panels, sims)
 end
 
 # ---------------------------------------------------------------- main
+
+# Bath reference, always reported: this is the only correct validation target (source C).
+if isfile(BATH_CSV)
+    braw = readdlm(BATH_CSV, ','; header=true)
+    bd, bh = braw[1], vec(braw[2])
+    bc(n) = findfirst(==(n), bh)
+    btc = Float64.(bd[:, bc("contact_time")])
+    @printf("BATH reference (bath_km_contact_time.csv, threshold metric z_cm<R): %d runs, tc %.4f..%.4f\n",
+            length(btc), minimum(btc), maximum(btc))
+    bo, oh = Float64.(bd[:, bc("Bo")]), Float64.(bd[:, bc("Oh")])
+    k = findfirst(i -> abs(oh[i] - 0.006165) < 1e-5 && abs(bo[i] - 0.016644) < 1e-5, eachindex(oh))
+    k === nothing || @printf("  water point Bo=%.6f Oh=%.6f: reference tc = %.4f  (this model: 4.4432)\n",
+                             bo[k], oh[k], btc[k])
+end
+
+if !ALLOW_SOLID
+    error("""
+
+    REFUSING TO RUN. The overlay below compares against SOLID-SUBSTRATE data
+    (SOLID_SUBSTRATE_contact_time_vs_we.csv), which is the WRONG PHYSICAL PROBLEM for this
+    bath model -- see the guard comment at the top of this file and the evidence box in
+    scripts/convert_experiments.py. It previously produced a spurious 2x contact-time
+    discrepancy that was chased as a model defect.
+
+    Rigid wall: tc set by the drop's l=2 free oscillation, 1.9..3.4 in those data.
+    Bath:       tc = 4.44..8.09 (bath_km_contact_time.csv). Different problems, different answers.
+
+    To validate this model, compare against bath_km_contact_time.csv (reported above).
+    To produce the solid-substrate overlay anyway, for contrast and clearly labelled as such,
+    pass --allow-solid-substrate.
+    """)
+end
+
 tc_exp = load_figure(TC_CSV, "tc_over_tsigma", "experiment")
 tc_dns = load_figure(TC_CSV, "tc_over_tsigma", "dns")
 tc_km  = load_figure(TC_CSV, "tc_over_tsigma", "km_model")
