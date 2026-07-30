@@ -118,6 +118,12 @@ const DEFAULT_NQ = 200
 #                previous value when they do not cross, clamped to [asin(0.01), asin(0.9998)].
 #                This is AlventosaEtAl2023's rule, read from their reference implementation
 #                (harrislab-brown/BouncingDroplets, bounce_alventosa_bessel_implicit.m:245).
+#                Their defaults: b = 25R, 151 bath modes, 55 drop modes, and bath eigenvalues
+#                k = besselzero(-1,...)/b. Since J_{-1} = -J_1 those are the J_1 zeros, i.e. a
+#                NO-FLUX wall -- the same condition we use. (An earlier note here claimed they
+#                use a Dirichlet/pinned wall, from misreading the separate u = besselzero(0,...)
+#                array, which is used for the pressure-projection interpolation and not for the
+#                bath basis. Corrected.)
 #                No feasibility predicates are consulted.
 # DEFAULT IS :feasible -- DELIBERATELY UNCHANGED. :crossing matches the reference implementation
 # and does fix the low-We patch collapse, but it does NOT fix the contact-time overprediction
