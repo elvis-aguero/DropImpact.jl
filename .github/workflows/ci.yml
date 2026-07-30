@@ -74,7 +74,9 @@ jobs:
   #   gh workflow run CI -f fluid=oil
   #
   fluid-experiment:
-    name: Contact time vs bath experiment (${{ inputs.fluid || 'oil' }})
+    # Static name: `inputs` does not exist for push/pull_request events, so interpolating it here
+    # renders the raw ${{ }} expression in the checks list on every PR.
+    name: Contact time vs bath experiment
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 180
