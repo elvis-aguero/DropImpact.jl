@@ -334,6 +334,16 @@ stored in those figures as `errorbar` objects, one per point, which is why an
 export walking only `line` children had previously recovered the eight model
 curves and none of the five experimental points.
 
+> ⚠️ **Provenance has a limit — see `data/experiments/PROVENANCE.md`.** The published
+> figures are `*_FINAL2.pdf`; the `.fig` files these points come from are named
+> `*_FFF.fig` and `*_FINALF.fig`, the PDFs are not available here, and there is no raw
+> per-trial oil data to cross-check against. Everything checkable agrees with the paper
+> — the captions' `(Bo, Oh)`, the tabulated `We` and `V0` ranges, the stated direction of
+> the model's error — but it cannot be confirmed that these are the *published* values
+> rather than a draft or extended version. Conclusions resting on the experimental
+> values, notably the δ deficit at oil `We ≥ 3.9`, inherit that. Conclusions about the
+> solver do not.
+
 | | We | experiment | this model | residual |
 |---|---|---|---|---|
 | water | 0.7251 | `4.6628 ± 0.1887` | `4.5039` | **−3.4 %**, 0.84 σ |

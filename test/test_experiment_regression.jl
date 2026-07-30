@@ -102,16 +102,28 @@ else
             ts = [l.t for l in levels]
 
             tct = threshold_contact_time(ts, levels)
-            # Penetration depth over the FIRST contact interval, which is the impact the experiment
-            # measured. Not the whole run, which picks up later bounces; and NOT the longest
-            # interval, which is what an earlier version of this file used -- at oil We = 1.216 the
-            # intervals are [(0, 4.389), (4.39, 4.415), (9.101, 14.0)] and the longest is the SECOND
-            # bounce, clipped by t_end. That reported delta = 0.2389 against a true 0.7231 and read
-            # as a 9.3 sd model defect. It was a defect in this test.
+
+            # MAXIMUM DEFLECTION IS INDEPENDENT OF ANY CONTACT-TIME DEFINITION. It is just
+            # -min(z_cm - xi(theta=0)) over the trajectory, so it needs NO contact window at all,
+            # and every rebound is weaker than the one before it -- so the deepest excursion is
+            # always the first impact, the one the experiment measured.
+            #
+            # An earlier version of this file windowed it on a contact interval anyway, and then
+            # took the LONGEST interval, which at oil We = 1.216 is the second bounce clipped by
+            # t_end: [(0, 4.389), (4.39, 4.415), (9.101, 14.0)]. That reported delta = 0.2389
+            # against a true 0.7231 and read as a 9.3 sd model defect. The window bought nothing
+            # and cost a spurious finding, so it is gone.
+            dmm = max_penetration_depth(levels, p.L)
+
+            # ...and the premise is asserted rather than assumed: the deepest excursion must fall
+            # inside the FIRST contact interval. If a later bounce ever went deeper, the quantity
+            # would no longer be the experiment's delta and this must fail rather than mislead.
             ivs = contact_intervals(ts, phases)
-            first_iv = isempty(ivs) ? nothing : ivs[1]
-            dmm = first_iv === nothing ? nothing :
-                  max_penetration_depth([l for l in levels if l.t <= first_iv.t_end], p.L)
+            if !isempty(ivs)
+                sp = [l.com.z - xi_of_theta(l.drop.beta, 0.0, p.L) for l in levels]
+                t_deepest = ts[argmin(sp)]
+                @test t_deepest <= ivs[1].t_end
+            end
 
             @info("regression point",
                   fluid=which, We=We_t, selector=REG_SELECTOR,
