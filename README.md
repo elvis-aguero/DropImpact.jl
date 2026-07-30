@@ -33,6 +33,8 @@ search rather than an unknown in a joint algebraic system.
 |---|---|
 | `src/`, `test/` | The `SpectralKM` package (root `Project.toml`): model, time stepper, test suite. |
 | `scripts/` | Validation, rendering, and sweep scripts. |
+| `data/experiments/bath_experiment_{water,oil}.csv` | The measured bath rebound metrics — contact time, CoR, penetration depth, each with a standard deviation over ≥5 trials. Extracted from the authors' `.fig` files by `scripts/extract_bath_experiment.m`. **The validation target.** |
+| `data/experiments/bath_model_curves_{water,oil}.csv` | The 1PKM and DNS curves from the same figures, for setting this model's residual beside the published ones. Model output, not measurement. |
 | `notebooks/tutorial.ipynb` | Guided tour: run an impact, read the diagnostics, compare wall conditions. Dependency-free (SVG figures). |
 | `scripts/sweep.jl` | Parallel parameter sweep; picks its own worker count by measuring, and is resumable. |
 | `derivations/paper-formulation.tex` | The model derivation, styled as a submittable methods section — the physics ground truth for this package. |
@@ -60,6 +62,59 @@ p = Params(We = 1.0958, Bo = 0.017, Oh = 0.006,   # water, R = 0.35 mm
 
 levels, diag, phases = run_simulation(p; t_end = 8.0, dt_init = 1e-3)
 ```
+
+### From measured quantities instead: `conditions`
+
+`Params` wants the nondimensional groups, which is right for the solver and wrong
+for the bench. If what you have is a fluid and a droplet, hand those over and let
+the groups be derived:
+
+```julia
+c = conditions(drop = :oil, R = 3.5e-4, V0 = 0.2724)   # SI: metres, metres/second
+p = Params(c; b = 6.0, h0 = 3.0)                        # everything else as usual
+
+c.We, c.Bo, c.Oh          # 1.2158, 0.056276, 0.057836
+t_sigma(c)                # 1.4170e-3 s — to put a model contact time back into milliseconds
+```
+
+Give the liquid on **either** side. `drop` and `bath` are interchangeable and the
+one you omit is taken to be the same liquid, which is the setup this model
+describes — a bath of the same fluid. Pass `require_both = true` to be *forced* to
+name both rather than have one inferred.
+
+A genuinely two-fluid specification is **refused, not resolved**:
+
+```julia
+conditions(drop = :water, bath = :oil, R = 3.5e-4, V0 = 0.4)   # ArgumentError
+```
+
+The nondimensionalisation carries a single `(ρ, σ, ν)` and the package has no
+density or viscosity ratio, so there is no honest way to run this — and quietly
+using the drop's properties for the bath would return a plausible number for a
+problem the model cannot represent. A relabelled *identical* liquid is not a
+two-fluid case and is accepted.
+
+Bath geometry may also be given dimensionally, in which case `b` and `h0` come
+back in units of `R`:
+
+```julia
+c = conditions(drop = :water, R = 3.5e-4, V0 = 0.4,
+               bath_radius = 6 * 3.5e-4, bath_depth = 3 * 3.5e-4)
+p = Params(c)                      # b and h0 taken from c
+```
+
+Two presets ship, with the properties of Alventosa et al.'s table 1 verbatim
+rather than textbook values — and at their tabulated `R = 0.35 mm` they reproduce
+the `(Bo, Oh)` printed on both experimental figures, which is what makes them
+checkable rather than merely stated:
+
+| | `ρ` (kg/m³) | `σ` (N/m) | `ν` (cSt) | `Bo` | `Oh` | published |
+|---|---|---|---|---|---|---|
+| `:water` (`WATER`) | 998 | 0.0722 | 0.978 | 0.016611 | 0.006146 | `0.017`, `0.006` |
+| `:oil` (`OIL_5CST`) | 960 | 0.0205 | 5 | 0.056276 | 0.057836 | `0.056`, `0.058` |
+
+Anything else is a `Fluid` you define: `Fluid(:glycerol_mix, 1150.0, 0.065, 5e-5)`,
+positionally `(name, ρ, σ, ν)` in SI.
 
 New here? Start with **`notebooks/tutorial.ipynb`** — a guided tour of the model,
 the diagnostics, the contact-time trap below, and the wall conditions. It has no
@@ -127,6 +182,43 @@ and the same physics.
 Use `M = L = 60`, `N = 3`, `nq = 40` for trajectories, and do not quote the
 pointwise pressure as a converged output at any `N`.
 
+### Drop viscous closure: `viscous = :reid | :lamb`
+
+`:reid` (default) takes the damping rates and frequencies from the exact roots of
+Reid's (1960) characteristic equation, valid at arbitrary Ohnesorge number.
+`:lamb` is the classical small-viscosity asymptotics `λ_l = Oh(l−1)(2l+1)`,
+`ω_l² = l(l−1)(l+2)` — the published closure, and what both parent codes use.
+
+Lamb *overpredicts the damping rate* by 4.1 % at `l = 2` and 22.9 % at `l = 120`
+even at water's `Oh = 0.006`, and by 23–97 % across `l = 2…16` by `Oh = 0.1`.
+`:reid` is the default because at small `Oh` the two are experimentally
+indistinguishable, so it cannot be worse against any available data, while at
+moderate `Oh` `:lamb` is *provably* wrong — a weak-dominance argument, not a
+measured improvement.
+
+> **The damping-rate error is not the contact-time error.** Measured on the oil
+> case (`Oh = 0.058`, `We = 1.2158`), where Lamb's rate is wrong by tens of percent
+> at high `l`, the two closures differ in **contact time by 0.24 %** (5.0912 vs
+> 5.0787). An earlier revision of this file argued from the rate alone that `:lamb`
+> was indefensible for oil; that overstates its effect on this observable by two
+> orders of magnitude. `:reid` remains the better closure, and it moves the contact
+> time *toward* experiment, but not by an amount that decides anything.
+
+### Contact-edge rule: `selector = :feasible | :crossing`
+
+`:feasible` (default) takes `θ_c = inf{θ : non-intersection and monotone-r}`.
+`:crossing` is the 1PKM reference implementation's rule — the largest crossing of
+the droplet and bath surfaces, held at its previous value when they do not cross.
+
+`:feasible` is known to be **degenerate**: once non-intersection stops binding the
+infimum is `0` regardless of the gap's size, and the patch can collapse by 200× in
+a single `1e-3` step without recovering. `:crossing` fixes that collapse and is the
+published rule, yet it is *not* the default, because it does not change the
+observable: contact time moves by 0.03 % on oil and by less than three digits on
+water (6.3312 vs 6.3218 at `We = 0.0231`). Switching would alter every stored
+result while resolving nothing currently under investigation. Opt in explicitly.
+Derived in `derivations/tangency-selector.tex`.
+
 ### Wall condition
 
 `Params(...; wall = :free | :pinned | :clamped)` selects the free-surface condition
@@ -186,6 +278,69 @@ that came from a diagnostic measuring its own grid spacing — computed analytic
 convergence is `M^(-3/2)` and the slope is recovered at every `r < b`.
 
 ## Validation
+
+### Contact time against the bath experiments, both fluids
+
+```bash
+julia --project=. scripts/compare_fluid_experiment.jl water
+julia --project=. scripts/compare_fluid_experiment.jl oil
+gh workflow run CI -f fluid=oil          # the same, in CI: ~45 min, uploads the CSV
+```
+
+The reference is `data/experiments/bath_experiment_{water,oil}.csv`: the authors'
+own measured points, with a standard deviation over at least five trials each,
+read out of their `.fig` files by `scripts/extract_bath_experiment.m`. They are
+stored in those figures as `errorbar` objects, one per point, which is why an
+export walking only `line` children had previously recovered the eight model
+curves and none of the five experimental points.
+
+| | We | experiment | this model | residual |
+|---|---|---|---|---|
+| water | 0.7251 | `4.6628 ± 0.1887` | `4.5039` | **−3.4 %**, 0.84 σ |
+| oil | 1.2158 | `4.6598 ± 0.2196` | `5.0787` | **+9.0 %**, 1.91 σ |
+
+Water sits inside the measurement scatter and low — the direction the paper reports
+for its own model. **Oil is the open finding**: the sign flips, and it is not
+explained by any available knob. `:crossing` moves it 0.03 %, `:lamb` moves it
+0.24 %, and the metric-definition offset below is ~2 % for oil. Only the lowest of
+the twelve oil points has been run at production truncation so far; whether +9 %
+persists across `We` is what the dispatched CI sweep answers.
+
+For scale, the published models against the *same* twelve oil points, interpolated
+from the figure's own curves:
+
+| | mean residual | range | within 1 σ | within 2 σ |
+|---|---|---|---|---|
+| 1PKM (quasi-potential) | −8.67 % | −18.08 % … +11.20 % | 2/12 | 6/12 |
+| DNS | +0.40 % | −6.31 % … +12.58 % | 9/12 | 11/12 |
+
+1PKM overpredicts at low `We` — `+11.20 %`, 2.38 σ at `We = 1.2158`, where this
+model gives `+9.0 %` — crosses over near `We ≈ 1.8`, and decays to `−18 %` at
+`We = 7.31` while the measured contact time stays flat. That decay is the paper's
+own reported underprediction at intermediate `We`.
+
+> ⚠️ **The two sides do not measure the same thing.** The experiment times the
+> **north pole crossing `z = 2R`**, because the detachment instant was not optically
+> resolvable; `threshold_contact_time` implements the paper's model convention, the
+> **centre of mass crossing `z = R`**. The authors quote a typical difference between
+> the conventions of **5 % for water and 2 % for oil**. The water residual above is
+> therefore of the same order as the definitional offset alone and must not be read
+> as evidence of 3 % accuracy; the oil residual is four times it. Implementing the
+> experiment's own metric is the obvious next step and has not been done.
+
+Two files in `data/experiments/` are **not** validation targets and are named or
+guarded so they cannot be mistaken for them. `bath_km_contact_time.csv` has no
+experiment column at all — `N = 60` is a mode count, so all 153 rows are model
+output, and comparing against it is a code-to-code cross-check. The
+`SOLID_SUBSTRATE_*` files are a **different physical problem**: a droplet rebounding
+from a rigid wall on its own `l = 2` free oscillation, contact time `1.96…3.36`,
+disjoint from the bath's `4.44…8.09`. `scripts/compare_experiments.jl` refuses to
+run against them without `--allow-solid-substrate`, and `test/test_bath_reference.jl`
+asserts the disjointness, because mistaking one for the other is what produced a
+spurious "2× contact-time overprediction" that was chased as a model defect for
+several rounds.
+
+### Trajectory against measured top and bottom
 
 ```bash
 julia --project=. scripts/validate_trajectory.jl   # vs experiment + DNS
@@ -295,6 +450,18 @@ CI runs the same command on every push to `main` and `dev`
 (`.github/workflows/ci.yml`). Coverage includes the Legendre and Bessel
 primitives, Gauss–Legendre exactness on the projection integrands, the BDF2
 affine reduction, the inner Galerkin residual, and the contact-step machinery.
+`test_physics.jl` asserts physical facts rather than internal identities —
+ballistic free flight, the Rayleigh–Lamb frequency, the capillary–gravity
+dispersion relation, non-decay of an inviscid mode, and that the contact impulse
+matches the momentum change to `1.3e-3`.
+
+One CI job is **not** on every push: the fluid-experiment comparison is one
+simulation per experimental point at production truncation, ~3.5 minutes each, so
+it is dispatched by hand and uploads its CSV as an artifact.
+
+```bash
+gh workflow run CI -f fluid=oil [-f selector=crossing] [-f viscous=lamb]
+```
 
 ## Derivation audits
 

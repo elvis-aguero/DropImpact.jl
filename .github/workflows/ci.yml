@@ -5,6 +5,23 @@ on:
     branches: [main, dev, 'dev-**']
   pull_request:
     branches: [main, dev, 'dev-**']
+  workflow_dispatch:
+    inputs:
+      fluid:
+        description: "Working fluid to compare against (water or oil)"
+        type: choice
+        options: [oil, water]
+        default: oil
+      selector:
+        description: "Contact-edge rule"
+        type: choice
+        options: [feasible, crossing]
+        default: feasible
+      viscous:
+        description: "Drop viscous closure"
+        type: choice
+        options: [reid, lamb]
+        default: reid
 
 jobs:
   julia-tests:
@@ -48,3 +65,34 @@ jobs:
       # Backs every number quoted in the design doc's wall-condition subsection.
       - name: Run feasibility_pinned_contact_line.jl
         run: julia --project=. derivations/feasibility_pinned_contact_line.jl
+
+  # THE FLUID-EXPERIMENT COMPARISON. One simulation per experimental point at production
+  # truncation, ~3.5 minutes each, so ~45 minutes for the 12 oil points. Far too slow to gate every
+  # push, and far too slow to run on a laptop -- hence its own manually dispatched job. Run it
+  # whenever anything touching the contact closure, the drop closure or the metric changes.
+  #
+  #   gh workflow run CI -f fluid=oil
+  #
+  fluid-experiment:
+    # Static name: `inputs` does not exist for push/pull_request events, so interpolating it here
+    # renders the raw ${{ }} expression in the checks list on every PR.
+    name: Contact time vs bath experiment
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.12"
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Compare against the experimental points
+        run: |
+          julia --project=. scripts/compare_fluid_experiment.jl "${{ inputs.fluid || 'oil' }}" \
+            --selector "${{ inputs.selector || 'feasible' }}" \
+            --viscous "${{ inputs.viscous || 'reid' }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model-vs-experiment-${{ inputs.fluid || 'oil' }}
+          path: data/experiments/model_vs_experiment_*.csv
