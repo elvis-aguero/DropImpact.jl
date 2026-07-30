@@ -38,22 +38,59 @@ $\min z_{cm}/R$ & $0.1670$ & $0.1110$ & we penetrate less \\
 
 at $\We=1.0959$, $\Bo=0.01661$, $\Oh=0.00617$ ($R=0.35$\,mm water, $U=0.4759$\,m/s).
 
-\paragraph{Where the false symptom came from.} The comparison script selected simulation
-parameters by \emph{binning on $\We$ alone}: it split $\log_{10}\We$ into equal intervals over the
-931 experimental points and took the median $\We$, $\Bo$ and $\Oh$ of whatever fell in each. The
-dataset spans $\Oh=0.0139\ldots0.7865$ and $\Bo=0.0037\ldots0.4197$, so a single window mixes
-fluids differing by $33$--$54\times$ in $\Oh$, and the experimental $t_c$ values \emph{within} one
-window already differ by $1.35$--$1.48\times$ --- comparable to the ``discrepancy'' being
-attributed to the model. The residual table then compared a mixed-parameter simulation curve
-against a median over that mixture. The confound was noted when the script was written and not
-acted upon for several rounds of investigation.
+\paragraph{Where the false symptom came from: the wrong physical problem.} The dataset the
+comparison was built on is the \textbf{droplet-onto-solid-substrate} problem, not the
+droplet-onto-bath problem this model solves. The spreadsheet is named after the repository
+\path{LowWeberDropRebound}, whose \path{README} opens ``MATLAB scripts for simulating the dynamics
+of liquid droplets impacting \emph{solid substrates}''. Six independent checks agree:
 
-A related trap, recorded so it is not repeated: the spreadsheet's ``Figure 5'' experimental block
-sits at $\Oh\approx0.042$, $\Bo\approx0.005$, matching \emph{neither} the paper's water case
-($0.017$, $0.006$) nor its oil case ($0.056$, $0.058$), and its \path{km_model} column is at a
-fixed $\Bo=0.0189$, $\Oh=0.0304$. The spreadsheet's figure numbering does not correspond to the
-manuscript in \path{references/}, so which experimental subset pairs with which model curve is
-still unresolved.
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Check & Result \\
+\midrule
+that repo's \path{sweeper_experiments.m} & hardcodes \verb|Bo = 0.0189| --- exactly the single \\
+ & fixed $\Bo$ of the file's \texttt{dns} and \texttt{km\_model} blocks \\
+\verb|besselj|, \verb|tanh|, \verb|bath| in its solver & \textbf{zero} occurrences: no bath surface
+degrees \\
+ & of freedom at all, only the drop's $\beta_l$ \\
+the bath paper's Figure 5 & water at $\Bo=0.017$, $\Oh=0.006$, with
+quasi-potential \\
+ & and DNS curves \emph{only} --- no ``KM model'' curve \\
+the bath paper's experiments & exactly \emph{two} $(\Bo,\Oh)$ points (water, oil); \\
+ & this file's is a continuum, $\Oh=0.0139\ldots0.7865$ \\
+the file's \texttt{km\_model} block & includes $\Bo=0$ and $\Oh=0$ rows, i.e.\ an inviscid \\
+ & zero-gravity sweep, not a two-fluid experiment \\
+contact-time bands & disjoint (below) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The last check is the physical one, and it is decisive. On a \emph{rigid wall} the rebound is set
+by the drop's own $l=2$ free oscillation, full period $2\pi/\sqrt{8}=2.2214\,t_\sigma$, with the
+classical superhydrophobic value $\approx2.6\,t_\sigma$ \cite{RichardClanetQuere2002}; that file
+gives $\texttt{km\_model}=2.41$ at $\We=1$ and $\texttt{dns}\in[1.96,3.36]$. A \emph{bath} deforms
+and carries impact energy away as interfacial waves, so the drop rides down and back up and
+contact lasts markedly longer: the bath dataset (\path{lowWeberComparison.csv},
+$153$ runs at $N=60$, $89$ with a measured $t_c$) spans $[4.4408,8.0946]$. The two bands do not
+overlap, so no amount of parameter matching reconciles them --- they are answers to different
+questions. This is now pinned in \path{test/test_bath_reference.jl}.
+
+At the bath reference's own water point, $\Bo=0.016644$, $\Oh=0.006165$, it reports
+$t_c=4.5286$; running the reference \textsc{Matlab} directly gives $4.5297$, and this model gives
+$4.4432$ --- squarely in the bath band. The earlier ``puzzle'' of $4.53$ against a
+\texttt{km\_model} value of $2.41$, which appeared to contradict the paper's own claim that $t_c$
+is nearly $\Oh$-independent, was never a puzzle: those are a bath and a rigid wall.
+
+\paragraph{A second, compounding error.} Independently of the wrong-problem error, the comparison
+script selected parameters by \emph{binning on $\We$ alone}: it split $\log_{10}\We$ into equal
+intervals over the $931$ points and took the median $\We$, $\Bo$ and $\Oh$ of whatever fell in
+each, so $\Bo$ and $\Oh$ were never matched to any actual measurement. A single window mixes
+fluids differing by $33$--$54\times$ in $\Oh$, and the $t_c$ values \emph{within} one window
+already differ by $1.35$--$1.48\times$. That confound was noted in writing when the script was
+created and not acted upon for several rounds. It is fixed --- \path{choose_points} now clusters
+on $(\We,\Bo,\Oh)$ jointly and reports each point's $\Oh$ and $\Bo$ spread --- but it was the
+smaller of the two mistakes.
 
 \paragraph{What was eliminated along the way.} Each by measurement, and each still worth knowing:
 
@@ -192,8 +229,9 @@ is used instead, seeded from the previous step and, at onset, from \path{onset_t
 This note establishes that the current rule is degenerate. It does \emph{not} establish that any
 replacement improves an observable --- and the measurement that was supposed to demonstrate that
 turned out to be measuring a comparison artefact. \texttt{:crossing}, which is the reference's own
-rule, changes $t_c$ by less than $0.2\%$. Any future claim here must be made against
-\emph{parameter-matched} experimental data, matching $\Bo$ and $\Oh$ and not $\We$ alone. Nor does it
+rule, changes $t_c$ by less than $0.2\%$. Any future claim here must be made against data for the
+\emph{same physical problem} --- a bath, not a solid substrate --- and then
+\emph{parameter-matched}, on $\Bo$ and $\Oh$ and not $\We$ alone. Nor does it
 revisit the upper edge of the admissible band, where $f<0$ and $p<0$ already exclude wide patches;
 whether that exclusion is itself too aggressive is a separate question.
 
@@ -202,6 +240,8 @@ whether that exclusion is itself too aggressive is a separate question.
   \emph{Inertio-capillary rebound of a droplet impacting a fluid bath}, JFM (2023).
 \bibitem{GaleanoRios2017} C.~A. Galeano-R\'ios, P.~A. Milewski, J.-M. Vanden-Broeck,
   \emph{Non-wetting impact of a sphere onto a bath}, JFM (2017).
+\bibitem{RichardClanetQuere2002} D. Richard, C. Clanet, D. Qu\'er\'e,
+  \emph{Contact time of a bouncing drop}, Nature \textbf{417}, 811 (2002).
 \end{thebibliography}
 
 \end{document}
