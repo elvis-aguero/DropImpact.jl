@@ -128,20 +128,51 @@ const DEFAULT_NQ = 200
 #                array, which is used for the pressure-projection interpolation and not for the
 #                bath basis. Corrected.)
 #                No feasibility predicates are consulted.
-# DEFAULT IS :feasible -- DELIBERATELY UNCHANGED. :crossing matches the reference implementation
-# and does fix the low-We patch collapse, but it does NOT fix the contact-time overprediction
-# (measured 6.3312 vs 6.3218 at We=0.0231, and 4.9553 vs 4.9531 at We=0.9985 -- unchanged to
-# three digits). Defaulting to it would alter every result while resolving nothing that is
-# currently under investigation, and would confound the next measurement. Opt in explicitly.
 #
-#   :feasible -- the current rule, theta_c = inf{theta : non-intersection and monotone-r}.
+#   :feasible -- the former default, theta_c = inf{theta : non-intersection and monotone-r}.
 #                DEGENERATE: once non-intersection stops binding, the infimum is 0 regardless of
 #                the gap's magnitude, so the patch collapsed 200x in a single 1e-3 step and never
 #                recovered; f then decayed to 1e-8 from above without reversing and contact
-#                dragged on for 63% of its duration after the drop began rising, giving a contact
-#                time ~2x too long and nearly flat in We. Retained only to reproduce the old
-#                behaviour. Derived in derivations/tangency-selector.tex.
-const DEFAULT_SELECTOR = :feasible
+#                dragged on for 63% of its duration after the drop began rising. Retained only to
+#                reproduce results generated before the default changed.
+#
+# DEFAULT IS :crossing, CHANGED FROM :feasible. An earlier revision of this comment said the
+# default was "DELIBERATELY UNCHANGED" because :crossing fixed the patch collapse without moving
+# any observable -- measured 6.3312 vs 6.3218 at We=0.0231 and 4.9553 vs 4.9531 at We=0.9985.
+# THAT VERDICT WAS DRAWN FROM TOO NARROW A SAMPLE AND IS RETRACTED. Both of those points are
+# low-We water. At high We the rules do not agree to three digits; one returns a physical
+# trajectory and the other returns a droplet that sinks.
+#
+# At We = 7.307 in 5 cSt oil (Bo = 0.0563, Oh = 0.0578), :feasible holds contact for 21 steps --
+# duration 0.194 against a MEASURED 5.26 -- then detaches, after which the drop free-falls to
+# z_cm = -84.2 by t = 30 and never re-contacts. threshold_contact_time returns `nothing`: there is
+# no contact time to report. :crossing gives contact over (0, 4.229), a rebound to z_cm = 2.239,
+# and further contacts at (18.33, 22.15) and beyond 29.38.
+#
+# GATED BEFORE SWITCHING, on both observables the experiments report, at THIS truncation, five
+# anchor points across both fluids, each rule on identical hardware (test_experiment_regression.jl,
+# the `selector-regression` CI job):
+#
+#   fluid  We      tc :feasible  tc :crossing   delta :feasible  delta :crossing
+#   water  0.7251  4.49560       4.49657        0.66951          0.66900
+#   water  1.9387  4.42119       4.42242        0.95812          0.95736
+#   oil    1.2158  5.07868       5.08034        0.72344          0.72301
+#   oil    3.9463  5.01559       5.01686        1.07481          1.07417
+#   oil    7.3070  none          5.03505        0.30009          1.33536
+#
+# Wherever :feasible produces an answer the two agree to four significant figures -- at most 0.03%
+# in tc, 0.08% in delta -- so this cannot regress a case that previously worked; where :feasible
+# fails it fails completely. A strict improvement, which is the only basis on which a default
+# affecting every stored result should move.
+#
+# CONSEQUENCE FOR STORED RESULTS: low-We numbers regenerated after this commit differ in the fourth
+# digit; high-We oil numbers change qualitatively, because they were not physical before.
+#
+# NOT FIXED BY THIS CHANGE: the maximum penetration depth is under-predicted, identically under both
+# rules (1.0742 vs 1.0748 at oil We = 3.946), so it is not selector-related. It is about twice
+# 1PKM's own deficit at moderate We while the contact time here is BETTER than 1PKM's
+# (-0.85 sd against -3.61 sd at We = 7.307). Open; see derivations/tangency-selector.tex.
+const DEFAULT_SELECTOR = :crossing
 
 # Viscous model for the DROP modes.
 #
